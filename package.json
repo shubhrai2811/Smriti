@@ -1,0 +1,19 @@
+{
+  "name": "smriti",
+  "version": "0.1.0",
+  "description": "Intelligent memory system for AI coding assistants",
+  "type": "module",
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "dev": "bun run src/services/worker-service.ts --daemon",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@anthropic-ai/claude-code": "latest",
+    "@types/bun": "latest",
+    "esbuild": "^0.25.0",
+    "hono": "^4.7.0",
+    "typescript": "^5.7.0"
+  }
+}
