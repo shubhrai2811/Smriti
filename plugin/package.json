@@ -1,0 +1,11 @@
+{
+  "name": "smriti-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runtime package for Smriti memory plugin",
+  "type": "module",
+  "dependencies": {},
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}

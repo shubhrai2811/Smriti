@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+plugin/scripts/
+plugin/ui/
+dist/
+
+# Smriti data
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Runtime
+*.pid
+
+# Environment
+.env
+.env.local
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test artifacts
+tests/e2e/*.sqlite*
+
+# Temp
+temp/
+.claude/

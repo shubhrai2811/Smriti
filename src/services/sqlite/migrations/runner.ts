@@ -1,5 +1,10 @@
 import type { Database } from 'bun:sqlite';
 import { migration001 } from './001-foundation.js';
+import { migration002 } from './002-smart-context.js';
+import { migration003 } from './003-reflection.js';
+import { migration004 } from './004-token-tracking.js';
+import { migration005 } from './005-entity-graph.js';
+import { migration006 } from './006-tags-decay.js';
 
 export interface Migration {
   version: number;
@@ -7,7 +12,7 @@ export interface Migration {
   up: (db: Database) => void;
 }
 
-const ALL_MIGRATIONS: Migration[] = [migration001];
+const ALL_MIGRATIONS: Migration[] = [migration001, migration002, migration003, migration004, migration005, migration006];
 
 export function runMigrations(db: Database): void {
   db.run(`CREATE TABLE IF NOT EXISTS schema_versions (

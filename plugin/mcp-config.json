@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "smriti": {
+      "command": "bun",
+      "args": ["run", "${PLUGIN_ROOT}/scripts/worker-service.cjs", "mcp"],
+      "env": {}
+    }
+  }
+}

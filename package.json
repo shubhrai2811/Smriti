@@ -12,8 +12,16 @@
   "devDependencies": {
     "@anthropic-ai/claude-code": "latest",
     "@types/bun": "latest",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
     "esbuild": "^0.25.0",
     "hono": "^4.7.0",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "sqlite-vec": "^0.1.7-alpha.2"
   }
 }

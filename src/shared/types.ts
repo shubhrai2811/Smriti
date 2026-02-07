@@ -105,3 +105,22 @@ export interface PidInfo {
   startedAt: string;
   version: string;
 }
+
+// Phase 3: Reflection types
+export interface ReflectionInsight {
+  text: string;
+  category: 'pattern' | 'lesson' | 'warning' | 'improvement';
+  confidence: number;
+  sourceObservationIds: number[];
+}
+
+export interface DeepReflectionResult {
+  patterns: ReflectionInsight[];
+  profileUpdates: Array<{
+    category: 'preference' | 'pattern' | 'common_mistake' | 'style' | 'expertise';
+    description: string;
+    confidence: number;
+    evidenceObservationIds: number[];
+  }>;
+  warnings: string[];
+}

@@ -3,6 +3,9 @@ import type { WorkerState } from '../server.js';
 import { createSession, getSessionByContentId, completeSession, incrementPromptCount } from '../sqlite/sessions.js';
 import { insertPrompt } from '../sqlite/prompts.js';
 import { enqueuePendingMessage, getPendingCount } from '../sqlite/pending-messages.js';
+import { buildProactiveContext } from '../context/proactive.js';
+import { embed, isEmbeddingReady } from '../embeddings/embedding-service.js';
+import { getConfig } from '../../shared/config.js';
 import { logger } from '../../utils/logger.js';
 
 export function sessionRoutes(state: WorkerState): Hono {
@@ -40,9 +43,39 @@ export function sessionRoutes(state: WorkerState): Hono {
       promptNumber,
     });
 
+    // Build proactive context for mid-session prompts (promptNumber > 1)
+    let proactiveContext: string | undefined;
+    const config = getConfig();
+    const proactiveConfig = config.get('proactive');
+
+    if (proactiveConfig.enabled && prompt && promptNumber > 1) {
+      try {
+        let promptEmbedding: Float32Array | undefined;
+        if (isEmbeddingReady()) {
+          promptEmbedding = await embed(prompt);
+        }
+
+        const context = buildProactiveContext(state.db, {
+          project,
+          prompt,
+          promptEmbedding,
+          branch: branch || undefined,
+        });
+
+        if (context) {
+          proactiveContext = context;
+        }
+      } catch (error) {
+        logger.debug('SESSION', 'Proactive context generation failed', {
+          error: (error as Error).message,
+        });
+      }
+    }
+
     return c.json({
       sessionId: session.id,
       promptNumber,
+      ...(proactiveContext ? { proactiveContext } : {}),
     });
   });
 

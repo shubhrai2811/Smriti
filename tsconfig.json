@@ -12,11 +12,12 @@
     "resolveJsonModule": true,
     "declaration": false,
     "noEmit": true,
-    "lib": ["ESNext"],
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM"],
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist", "plugin"]
 }

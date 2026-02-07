@@ -1,0 +1,63 @@
+{
+  "_template_note": "This is a template. The install script (scripts/install-cursor.sh) replaces ${SMRITI_ROOT} with the absolute path to the Smriti project root.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${SMRITI_ROOT}/plugin/scripts/worker-service.cjs start",
+            "timeout": 60
+          },
+          {
+            "type": "command",
+            "command": "${SMRITI_ROOT}/plugin/scripts/worker-service.cjs hook cursor context",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${SMRITI_ROOT}/plugin/scripts/worker-service.cjs hook cursor session-init",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${SMRITI_ROOT}/plugin/scripts/worker-service.cjs hook cursor observation",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${SMRITI_ROOT}/plugin/scripts/worker-service.cjs hook cursor summarize",
+            "timeout": 120
+          },
+          {
+            "type": "command",
+            "command": "${SMRITI_ROOT}/plugin/scripts/worker-service.cjs hook cursor session-complete",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
