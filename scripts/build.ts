@@ -5,8 +5,9 @@ async function buildSmriti() {
   const packageJson = JSON.parse(readFileSync('package.json', 'utf-8'));
   const version = packageJson.version;
 
-  // Ensure output directory exists
+  // Ensure output directories exist
   mkdirSync('plugin/scripts', { recursive: true });
+  mkdirSync('plugin/opencode', { recursive: true });
 
   console.log(`Building smriti v${version}...`);
 
@@ -37,6 +38,23 @@ async function buildSmriti() {
 
   // Make executable
   chmodSync('plugin/scripts/worker-service.cjs', 0o755);
+
+  // Build OpenCode plugin
+  await build({
+    entryPoints: ['src/integrations/opencode/index.ts'],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'esm',
+    outfile: 'plugin/opencode/smriti-plugin.js',
+    minify: true,
+    logLevel: 'error',
+    define: {
+      '__SMRITI_VERSION__': JSON.stringify(version),
+    },
+  });
+
+  console.log('Built OpenCode plugin -> plugin/opencode/smriti-plugin.js');
 
   // Build UI dashboard (optional — doesn't fail the main build)
   try {

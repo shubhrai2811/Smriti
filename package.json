@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Intelligent memory system for AI coding assistants",
   "type": "module",
+  "exports": {
+    ".": "./src/services/worker-service.ts",
+    "./opencode": "./plugin/opencode/smriti-plugin.js"
+  },
   "scripts": {
     "build": "bun run scripts/build.ts",
     "dev": "bun run src/services/worker-service.ts --daemon",

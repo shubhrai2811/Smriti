@@ -11,6 +11,37 @@ import { addTag, removeTag, getTagsByObservation, getAllTags } from '../sqlite/t
 export function dataRoutes(state: WorkerState): Hono {
   const app = new Hono();
 
+  // GET /data/stats — aggregate statistics
+  app.get('/stats', (c) => {
+    const project = c.req.query('project') || '';
+
+    const obsCount = (state.db.query(
+      project ? 'SELECT COUNT(*) as count FROM observations WHERE project = ?' : 'SELECT COUNT(*) as count FROM observations'
+    ).get(...(project ? [project] : [])) as any).count;
+
+    const sessionCount = (state.db.query(
+      project ? 'SELECT COUNT(*) as count FROM sessions WHERE project = ?' : 'SELECT COUNT(*) as count FROM sessions'
+    ).get(...(project ? [project] : [])) as any).count;
+
+    const typeBreakdown = state.db.query(
+      project
+        ? 'SELECT type, COUNT(*) as count FROM observations WHERE project = ? GROUP BY type ORDER BY count DESC'
+        : 'SELECT type, COUNT(*) as count FROM observations GROUP BY type ORDER BY count DESC'
+    ).all(...(project ? [project] : [])) as Array<{ type: string; count: number }>;
+
+    // DB file size
+    const dbSizeRows = state.db.query('SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()').get() as any;
+    const dbSizeBytes = dbSizeRows?.size || 0;
+    const dbSizeMB = (dbSizeBytes / (1024 * 1024)).toFixed(2);
+
+    return c.json({
+      observations: obsCount,
+      sessions: sessionCount,
+      typeBreakdown,
+      dbSizeMB: `${dbSizeMB} MB`,
+    });
+  });
+
   // GET /data/sessions?project=X&limit=20
   app.get('/sessions', (c) => {
     const project = c.req.query('project') || '';

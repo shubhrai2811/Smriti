@@ -371,7 +371,6 @@ describe('Web UI E2E', () => {
       expect(settings.reflection).toBeTruthy();
       expect(settings.provider).toBeTruthy();
       expect(settings.masking).toBeTruthy();
-      expect(settings.branch).toBeTruthy();
       expect(settings.privacy).toBeTruthy();
       expect(settings.log).toBeTruthy();
     });
@@ -383,8 +382,6 @@ describe('Web UI E2E', () => {
       expect(settings.context.tokenBudget).toBe(4000);
       expect(settings.context.showInlineSummary).toBe(true);
       expect(settings.extraction.batchSize).toBe(5);
-      expect(settings.branch.filterMode).toBe('all');
-      expect(settings.branch.defaultBranch).toBe('main');
     });
   });
 

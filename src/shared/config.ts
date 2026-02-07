@@ -37,15 +37,13 @@ export interface SmritiSettings {
     fallbackEnabled: boolean;
     failureThreshold: number;
     cooldownMinutes: number;
+    claudeBaseUrl: string;
+    claudeApiKey: string;
   };
   masking: {
     enabled: boolean;
     briefThreshold: number;  // sessions ago to switch to brief
     minimalThreshold: number; // sessions ago to switch to minimal
-  };
-  branch: {
-    filterMode: 'all' | 'branch-only' | 'branch-plus-main';
-    defaultBranch: string;
   };
   privacy: {
     redactSecrets: boolean;
@@ -64,6 +62,14 @@ export interface SmritiSettings {
   archival: {
     retentionDays: number;
     vacuumOnMaintenance: boolean;
+  };
+  gotcha: {
+    enabled: boolean;
+    minImportance: number;
+  };
+  claudemd: {
+    enabled: boolean;
+    maxEntries: number;
   };
   log: {
     level: string;
@@ -105,15 +111,13 @@ const DEFAULT_SETTINGS: SmritiSettings = {
     fallbackEnabled: true,
     failureThreshold: 3,
     cooldownMinutes: 5,
+    claudeBaseUrl: '',
+    claudeApiKey: '',
   },
   masking: {
     enabled: true,
     briefThreshold: 3,
     minimalThreshold: 6,
-  },
-  branch: {
-    filterMode: 'all',
-    defaultBranch: 'main',
   },
   privacy: {
     redactSecrets: true,
@@ -132,6 +136,14 @@ const DEFAULT_SETTINGS: SmritiSettings = {
   archival: {
     retentionDays: 90,
     vacuumOnMaintenance: true,
+  },
+  gotcha: {
+    enabled: true,
+    minImportance: 7,
+  },
+  claudemd: {
+    enabled: false,
+    maxEntries: 15,
   },
   log: {
     level: 'info',
@@ -165,11 +177,11 @@ const ENV_OVERRIDES: Record<string, (settings: SmritiSettings, value: string) =>
   SMRITI_FALLBACK_ENABLED: (s, v) => { s.provider.fallbackEnabled = v === 'true'; },
   SMRITI_FAILURE_THRESHOLD: (s, v) => { s.provider.failureThreshold = parseInt(v, 10); },
   SMRITI_COOLDOWN_MINUTES: (s, v) => { s.provider.cooldownMinutes = parseInt(v, 10); },
+  SMRITI_CLAUDE_BASE_URL: (s, v) => { s.provider.claudeBaseUrl = v; },
+  SMRITI_CLAUDE_API_KEY: (s, v) => { s.provider.claudeApiKey = v; },
   SMRITI_MASKING_ENABLED: (s, v) => { s.masking.enabled = v === 'true'; },
   SMRITI_MASKING_BRIEF_THRESHOLD: (s, v) => { s.masking.briefThreshold = parseInt(v, 10); },
   SMRITI_MASKING_MINIMAL_THRESHOLD: (s, v) => { s.masking.minimalThreshold = parseInt(v, 10); },
-  SMRITI_BRANCH_FILTER_MODE: (s, v) => { s.branch.filterMode = v as any; },
-  SMRITI_DEFAULT_BRANCH: (s, v) => { s.branch.defaultBranch = v; },
   SMRITI_DEDUP_ENABLED: (s, v) => { s.dedup.enabled = v === 'true'; },
   SMRITI_DEDUP_THRESHOLD: (s, v) => { s.dedup.similarityThreshold = parseFloat(v); },
   SMRITI_PROACTIVE_ENABLED: (s, v) => { s.proactive.enabled = v === 'true'; },
@@ -178,6 +190,10 @@ const ENV_OVERRIDES: Record<string, (settings: SmritiSettings, value: string) =>
   SMRITI_PROACTIVE_TOKEN_BUDGET: (s, v) => { s.proactive.tokenBudget = parseInt(v, 10); },
   SMRITI_RETENTION_DAYS: (s, v) => { s.archival.retentionDays = parseInt(v, 10); },
   SMRITI_VACUUM_ON_MAINTENANCE: (s, v) => { s.archival.vacuumOnMaintenance = v === 'true'; },
+  SMRITI_GOTCHA_ENABLED: (s, v) => { s.gotcha.enabled = v === 'true'; },
+  SMRITI_GOTCHA_MIN_IMPORTANCE: (s, v) => { s.gotcha.minImportance = parseInt(v, 10); },
+  SMRITI_CLAUDEMD_ENABLED: (s, v) => { s.claudemd.enabled = v === 'true'; },
+  SMRITI_CLAUDEMD_MAX_ENTRIES: (s, v) => { s.claudemd.maxEntries = parseInt(v, 10); },
   SMRITI_LOG_LEVEL: (s, v) => { s.log.level = v; },
 };
 

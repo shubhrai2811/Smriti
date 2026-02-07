@@ -59,6 +59,16 @@ const TOOL_DEFINITIONS = [
         },
         project: { type: 'string', description: 'Project name (defaults to CWD basename)' },
         importance: { type: 'number', description: 'Importance score 1-10 (default 5)' },
+        concepts: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Concept tags for categorization',
+        },
+        files_affected: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'File paths affected by this observation',
+        },
       },
       required: ['title', 'facts'],
     },
@@ -130,6 +140,8 @@ function handleSave(
   const type = (args.type as string) || 'discovery';
   const project = (args.project as string) || defaultProject();
   const importance = (args.importance as number) || 5;
+  const concepts = args.concepts as string[] | undefined;
+  const filesAffected = args.files_affected as string[] | undefined;
 
   // Create or reuse an MCP session
   const contentSessionId = `mcp-${Date.now()}`;
@@ -147,6 +159,8 @@ function handleSave(
     title,
     facts: JSON.stringify(facts),
     importance,
+    concepts: concepts ? JSON.stringify(concepts) : undefined,
+    filesAffected: filesAffected ? JSON.stringify(filesAffected) : undefined,
   });
 
   return { id, saved: true };

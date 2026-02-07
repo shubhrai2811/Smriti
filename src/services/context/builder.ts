@@ -1,5 +1,5 @@
 import type { Database } from 'bun:sqlite';
-import { getObservationsByBranchFilter } from '../sqlite/observations.js';
+import { getRecentObservations } from '../sqlite/observations.js';
 import { getLastSummary } from '../sqlite/summaries.js';
 import { getProfileByProject } from '../sqlite/developer-profile.js';
 import { getReflectionsByProject } from '../sqlite/reflections.js';
@@ -30,7 +30,7 @@ export function buildContext(
   db: Database,
   options: ContextBuildOptions,
 ): string {
-  const { project, branch, prompt, promptEmbedding, tokenBudget, showInlineSummary } = options;
+  const { project, prompt, promptEmbedding, tokenBudget, showInlineSummary } = options;
 
   const lastSummary = getLastSummary(db, project);
 
@@ -62,16 +62,9 @@ export function buildContext(
     }
   }
 
-  // Fallback: recency + importance sort with branch filtering
+  // Fallback: recency + importance sort
   if (scoredObservations.length === 0) {
-    const config = getConfig();
-    const branchConfig = config.get('branch');
-    const observations = getObservationsByBranchFilter(db, project, {
-      branch,
-      filterMode: branchConfig.filterMode,
-      mainBranch: branchConfig.defaultBranch,
-      limit: 50,
-    });
+    const observations = getRecentObservations(db, project, { limit: 50 });
     scoredObservations = observations.map(obs => ({
       observation: obs,
       score: 0,
