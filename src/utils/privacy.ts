@@ -27,12 +27,37 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   // AWS Secret Access Keys (40 chars, base64-ish)
   { name: 'AWS Secret Key', pattern: /\b[0-9a-zA-Z/+=]{40}\b(?=.*(?:aws|secret|key))/gi },
 
+  // Anthropic API keys (sk-ant-* — must be before generic sk- pattern)
+  { name: 'Anthropic API Key', pattern: /\bsk-ant-[a-zA-Z0-9_-]{20,}\b/g },
+
+  // OpenAI API keys (sk- with 48+ chars — must be before generic sk- pattern)
+  { name: 'OpenAI API Key', pattern: /\bsk-[a-zA-Z0-9]{48,}\b/g },
+
   // Generic API keys (common formats: sk-*, api_*, key-*, etc.)
   { name: 'API Key', pattern: /\b(sk-[a-zA-Z0-9]{20,})\b/g },
   { name: 'API Key', pattern: /\b(api[_-]?key[_-]?[=:]\s*["']?[a-zA-Z0-9_\-]{20,})["']?/gi },
 
+  // NPM access tokens
+  { name: 'NPM Token', pattern: /\bnpm_[a-zA-Z0-9]{36}\b/g },
+
+  // Google API keys (Cloud / Firebase)
+  { name: 'Google API Key', pattern: /\bAIza[0-9A-Za-z_-]{35}\b/g },
+
+  // Stripe keys (secret and publishable, live and test)
+  { name: 'Stripe Secret Key', pattern: /\bsk_(?:live|test)_[a-zA-Z0-9]{24,}\b/g },
+  { name: 'Stripe Publishable Key', pattern: /\bpk_(?:live|test)_[a-zA-Z0-9]{24,}\b/g },
+
+  // SendGrid API keys
+  { name: 'SendGrid API Key', pattern: /\bSG\.[a-zA-Z0-9_-]{22}\.[a-zA-Z0-9_-]{43}\b/g },
+
+  // Twilio API Key SIDs
+  { name: 'Twilio API Key', pattern: /\bSK[a-f0-9]{32}\b/g },
+
   // Bearer tokens in authorization headers
   { name: 'Bearer Token', pattern: /Bearer\s+[a-zA-Z0-9_\-.~+/]+=*/g },
+
+  // Basic auth headers (Base64-encoded credentials)
+  { name: 'Basic Auth', pattern: /\bbasic\s+[a-zA-Z0-9+/]{20,}={0,2}\b/gi },
 
   // Private keys (PEM format)
   { name: 'Private Key', pattern: /-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|ENCRYPTED\s+)?PRIVATE\s+KEY-----[\s\S]*?-----END\s+(?:RSA\s+|EC\s+|DSA\s+|ENCRYPTED\s+)?PRIVATE\s+KEY-----/g },
@@ -42,6 +67,12 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
 
   // Connection strings with credentials
   { name: 'Connection String', pattern: /(?:mongodb|postgres|postgresql|mysql|redis|amqp):\/\/[^:]+:[^@]+@[^\s"']+/gi },
+
+  // Hex-encoded secrets in config assignments (secret= or secret: followed by 32-64 hex chars)
+  { name: 'Hex Secret', pattern: /\bsecret\s*[=:]\s*["']?[a-f0-9]{32,64}["']?/gi },
+
+  // SSH private key file paths
+  { name: 'SSH Key Path', pattern: /~\/\.ssh\/id_[a-z]+/g },
 
   // GitHub tokens (classic PAT and fine-grained)
   { name: 'GitHub Token', pattern: /\b(ghp_[a-zA-Z0-9]{36})\b/g },
