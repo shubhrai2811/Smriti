@@ -150,5 +150,30 @@ export function sessionRoutes(state: WorkerState): Hono {
     return c.json({ completed: true });
   });
 
+  // POST /sessions/:sessionId/observe-correction — record user correction as high-importance observation
+  app.post('/:sessionId/observe-correction', async (c) => {
+    const body = await c.req.json();
+    const { sessionId, promptText, matchedPattern, project } = body;
+
+    if (!sessionId || !promptText || !project) {
+      return c.json({ error: 'sessionId, promptText, and project required' }, 400);
+    }
+
+    const { insertObservation } = await import('../sqlite/observations.js');
+
+    const id = insertObservation(state.db, {
+      sessionId: typeof sessionId === 'number' ? sessionId : parseInt(sessionId, 10),
+      project,
+      type: 'decision',
+      title: `User correction: ${matchedPattern || 'preference change'}`,
+      facts: JSON.stringify([promptText]),
+      importance: 8,
+    });
+
+    logger.debug('SESSION', 'Correction observation recorded', { sessionId, matchedPattern });
+
+    return c.json({ id, recorded: true });
+  });
+
   return app;
 }

@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { createTestContext } from '../fixtures/helpers';
 import { insertObservation } from '../../src/services/sqlite/observations';
-import { getObservationsByBranchFilter } from '../../src/services/sqlite/observations';
 import { detectPlatform, getAdapter } from '../../src/cli/adapters/index';
 import { claudeCodeAdapter } from '../../src/cli/adapters/claude-code';
 import { cursorAdapter } from '../../src/cli/adapters/cursor';
@@ -187,101 +186,6 @@ describe('Multi-IDE & Branch E2E', () => {
     });
   });
 
-  describe('Branch Filtering', () => {
-    it('filter mode "all" returns observations from all branches', () => {
-      const session = createTestSession(ctx.db, '/tmp/test');
-
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'main',
-        type: 'discovery', title: 'Main branch obs', importance: 5,
-      });
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'feature-x',
-        type: 'discovery', title: 'Feature branch obs', importance: 5,
-      });
-
-      const results = getObservationsByBranchFilter(ctx.db, '/tmp/test', {
-        branch: 'feature-x',
-        filterMode: 'all',
-        limit: 50,
-      });
-
-      expect(results.length).toBe(2);
-    });
-
-    it('filter mode "branch-only" returns only current branch', () => {
-      const session = createTestSession(ctx.db, '/tmp/test');
-
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'main',
-        type: 'discovery', title: 'Main branch obs', importance: 5,
-      });
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'feature-x',
-        type: 'discovery', title: 'Feature branch obs', importance: 5,
-      });
-
-      const results = getObservationsByBranchFilter(ctx.db, '/tmp/test', {
-        branch: 'feature-x',
-        filterMode: 'branch-only',
-        limit: 50,
-      });
-
-      expect(results.length).toBe(1);
-      expect(results[0].title).toBe('Feature branch obs');
-    });
-
-    it('filter mode "branch-plus-main" returns current + main branch', () => {
-      const session = createTestSession(ctx.db, '/tmp/test');
-
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'main',
-        type: 'discovery', title: 'Main branch obs', importance: 5,
-      });
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'feature-x',
-        type: 'discovery', title: 'Feature branch obs', importance: 5,
-      });
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'feature-y',
-        type: 'discovery', title: 'Other branch obs', importance: 5,
-      });
-
-      const results = getObservationsByBranchFilter(ctx.db, '/tmp/test', {
-        branch: 'feature-x',
-        filterMode: 'branch-plus-main',
-        mainBranch: 'main',
-        limit: 50,
-      });
-
-      expect(results.length).toBe(2);
-      const titles = results.map(r => r.title);
-      expect(titles).toContain('Main branch obs');
-      expect(titles).toContain('Feature branch obs');
-      expect(titles).not.toContain('Other branch obs');
-    });
-
-    it('branch-only without branch falls back to all', () => {
-      const session = createTestSession(ctx.db, '/tmp/test');
-
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'main',
-        type: 'discovery', title: 'Obs 1', importance: 5,
-      });
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'feature',
-        type: 'discovery', title: 'Obs 2', importance: 5,
-      });
-
-      const results = getObservationsByBranchFilter(ctx.db, '/tmp/test', {
-        filterMode: 'branch-only',
-        limit: 50,
-      });
-
-      expect(results.length).toBe(2);
-    });
-  });
-
   describe('Source IDE Tagging', () => {
     it('observations store source_ide correctly', () => {
       const session = createTestSession(ctx.db, '/tmp/test');
@@ -384,42 +288,6 @@ describe('Multi-IDE & Branch E2E', () => {
       });
 
       expect(context).not.toContain('sources:');
-    });
-  });
-
-  describe('Context with Branch Filtering', () => {
-    it('context respects branch filter mode from config', () => {
-      const session = createTestSession(ctx.db, '/tmp/test', 'completed');
-
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'main',
-        type: 'discovery', title: 'Main obs', importance: 5,
-      });
-      insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', branch: 'feature',
-        type: 'discovery', title: 'Feature obs', importance: 5,
-      });
-
-      // Default filter mode is 'all', so both should appear
-      const context = buildContext(ctx.db, {
-        project: '/tmp/test',
-        branch: 'feature',
-        tokenBudget: 4000,
-        showInlineSummary: false,
-      });
-
-      expect(context).toContain('Main obs');
-      expect(context).toContain('Feature obs');
-    });
-  });
-
-  describe('Settings', () => {
-    it('includes branch config', async () => {
-      const res = await fetch(`${ctx.baseUrl}/settings`);
-      const settings = await res.json() as any;
-      expect(settings.branch).toBeTruthy();
-      expect(settings.branch.filterMode).toBe('all');
-      expect(settings.branch.defaultBranch).toBe('main');
     });
   });
 

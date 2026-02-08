@@ -14,48 +14,81 @@ export class ClaudeSDKProvider implements AIProvider {
 
     mkdirSync(OBSERVER_SESSIONS_DIR, { recursive: true });
 
-    let fullResponse = '';
+    // Isolate Smriti's provider config from user's env
+    const { getConfig } = await import('../../shared/config.js');
+    const config = getConfig();
+    const smritiBaseUrl = config.get('provider', 'claudeBaseUrl');
+    const smritiApiKey = config.get('provider', 'claudeApiKey');
 
-    const messages = createPromptGenerator(prompt);
+    const savedBaseUrl = process.env.ANTHROPIC_BASE_URL;
+    const savedApiKey = process.env.ANTHROPIC_API_KEY;
 
-    const result = query({
-      prompt: messages,
-      options: {
-        maxTurns: 1,
-        systemPrompt: 'You are a structured data extraction assistant. Output only the requested XML format. No explanations.',
-        cwd: OBSERVER_SESSIONS_DIR,
-      },
-    });
+    try {
+      // Override with Smriti's isolated config (or clear to use direct Anthropic)
+      if (smritiBaseUrl) {
+        process.env.ANTHROPIC_BASE_URL = smritiBaseUrl;
+      } else {
+        delete process.env.ANTHROPIC_BASE_URL;
+      }
+      if (smritiApiKey) {
+        process.env.ANTHROPIC_API_KEY = smritiApiKey;
+      }
 
-    // Reset usage before each call
-    this.lastUsage = null;
+      let fullResponse = '';
 
-    for await (const message of result) {
-      if (message.type === 'assistant') {
-        const content = message.message.content;
-        if (typeof content === 'string') {
-          fullResponse += content;
-        } else if (Array.isArray(content)) {
-          for (const block of content) {
-            if (block.type === 'text') {
-              fullResponse += block.text;
+      const messages = createPromptGenerator(prompt);
+
+      const result = query({
+        prompt: messages,
+        options: {
+          maxTurns: 1,
+          systemPrompt: 'You are a structured data extraction assistant. Output only the requested XML format. No explanations.',
+          cwd: OBSERVER_SESSIONS_DIR,
+        },
+      });
+
+      // Reset usage before each call
+      this.lastUsage = null;
+
+      for await (const message of result) {
+        if (message.type === 'assistant') {
+          const content = message.message.content;
+          if (typeof content === 'string') {
+            fullResponse += content;
+          } else if (Array.isArray(content)) {
+            for (const block of content) {
+              if (block.type === 'text') {
+                fullResponse += block.text;
+              }
             }
           }
         }
+
+        // Track usage from result messages that include it
+        if (message.type === 'result' && (message as any).usage) {
+          const usage = (message as any).usage;
+          this.lastUsage = {
+            inputTokens: usage.input_tokens || 0,
+            outputTokens: usage.output_tokens || 0,
+            model: (message as any).model,
+          };
+        }
       }
 
-      // Track usage from result messages that include it
-      if (message.type === 'result' && (message as any).usage) {
-        const usage = (message as any).usage;
-        this.lastUsage = {
-          inputTokens: usage.input_tokens || 0,
-          outputTokens: usage.output_tokens || 0,
-          model: (message as any).model,
-        };
+      return fullResponse;
+    } finally {
+      // Restore user's env
+      if (savedBaseUrl !== undefined) {
+        process.env.ANTHROPIC_BASE_URL = savedBaseUrl;
+      } else {
+        delete process.env.ANTHROPIC_BASE_URL;
+      }
+      if (savedApiKey !== undefined) {
+        process.env.ANTHROPIC_API_KEY = savedApiKey;
+      } else {
+        delete process.env.ANTHROPIC_API_KEY;
       }
     }
-
-    return fullResponse;
   }
 
   async isAvailable(): Promise<boolean> {

@@ -45,6 +45,23 @@ export const sessionInitHandler: EventHandler = {
         proactiveContext?: string;
       };
 
+      // Detect correction patterns in the prompt
+      const { detectCorrection } = await import('../../services/extraction/corrections.js');
+      const correction = detectCorrection(prompt);
+      if (correction.isCorrection && responseBody.sessionId) {
+        // Fire-and-forget: create a high-importance correction observation
+        fetch(`http://127.0.0.1:${port}/sessions/${responseBody.sessionId}/observe-correction`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: responseBody.sessionId,
+            promptText: prompt,
+            matchedPattern: correction.matchedPattern,
+            project,
+          }),
+        }).catch(() => {}); // Fire-and-forget
+      }
+
       if (responseBody.proactiveContext) {
         return {
           continue: true,

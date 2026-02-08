@@ -34,6 +34,21 @@ async function main() {
     case 'mcp':
       await mcpCommand();
       break;
+    case 'config': {
+      const { configCommand } = await import('../cli/commands/config-command.js');
+      await configCommand(args.slice(1));
+      break;
+    }
+    case 'search': {
+      const { searchCommand } = await import('../cli/commands/search-command.js');
+      await searchCommand(args.slice(1));
+      break;
+    }
+    case 'stats': {
+      const { statsCommand } = await import('../cli/commands/stats-command.js');
+      await statsCommand();
+      break;
+    }
     case '--daemon':
       await daemonCommand();
       break;

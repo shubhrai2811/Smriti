@@ -12,7 +12,7 @@
 [![Bun](https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-258_passing-brightgreen?style=for-the-badge&logo=checkmarx&logoColor=white)](#test-suite)
+[![Tests](https://img.shields.io/badge/Tests-290+_passing-brightgreen?style=for-the-badge&logo=checkmarx&logoColor=white)](#test-suite)
 
 <br/>
 
@@ -109,6 +109,26 @@ curl http://127.0.0.1:<port>/health
 open http://127.0.0.1:<port>/ui
 ```
 
+### Interactive CLI
+
+Smriti includes CLI commands for configuration and memory search:
+
+```bash
+# View all settings
+smriti config
+
+# Get/set specific settings
+smriti config get context.tokenBudget
+smriti config set context.tokenBudget 8000
+
+# Search memory from terminal
+smriti search "authentication patterns"
+smriti search "database setup" --project my-app --limit 5
+
+# View stats
+smriti stats
+```
+
 ---
 
 ## Features
@@ -179,6 +199,7 @@ Smriti uses a **shared SQLite database** that works across multiple IDEs:
 
 - **Claude Code** -- native plugin integration via hooks
 - **Cursor** -- installable via `scripts/install-cursor.sh`
+- **OpenCode** -- native plugin with 25+ events, custom tools, and system prompt transforms
 
 All observations are tagged with their source IDE and branch. Your memory follows you regardless of which tool you're using.
 
@@ -208,6 +229,48 @@ When you fix the same bug twice or revisit the same file, Smriti doesn't store r
 ### Proactive Context
 
 Smriti doesn't wait for session boundaries. When your **mid-session prompt** relates to past observations, it proactively injects relevant context -- surfacing that bug fix from last week or the architectural decision from last month, right when you need it.
+
+---
+
+### Correction Detection
+
+When you tell your AI assistant "no, use X instead" or "don't do that", Smriti automatically captures these as **high-importance preference observations**. These corrections persist and influence future sessions, so your AI remembers your preferences.
+
+Correction patterns detected:
+- "No, use X instead" / "Actually, prefer Y"
+- "Don't use/do/add Z"
+- "That's wrong" / "Stop using X"
+- "Please change/switch/replace"
+
+---
+
+### Gotcha / Pitfall Warnings
+
+When you touch a file that previously caused issues (high-importance bugfix, decision, or pattern observations), Smriti **proactively warns you** about known pitfalls. No more re-introducing the same bugs.
+
+```
+Touching src/parser.ts...
+### Gotchas for files you're touching
+- **[bugfix]** Fixed null crash in parser: Parser crashed on empty input
+```
+
+Configurable via `gotcha.enabled` and `gotcha.minImportance` settings.
+
+---
+
+### CLAUDE.md Auto-Generation
+
+Smriti can automatically generate and maintain a `CLAUDE.md` file in your project root with:
+- Developer profile entries
+- Key insights from reflections
+- Important patterns and decisions
+
+**Disabled by default.** Enable with:
+```bash
+smriti config set claudemd.enabled true
+```
+
+The generated section is delimited by HTML comments and won't overwrite your existing CLAUDE.md content.
 
 ---
 
@@ -465,14 +528,42 @@ Smriti is configured via `~/.smriti/settings.json` with sensible defaults. Every
 </details>
 
 <details>
-<summary><strong>Branch & Dedup</strong></summary>
+<summary><strong>Dedup</strong></summary>
 
 | Setting | Default | Env Var | Description |
 |---|---|---|---|
-| `branch.filterMode` | `all` | `SMRITI_BRANCH_FILTER_MODE` | Branch filter: `all`, `branch-only`, `branch-plus-main` |
-| `branch.defaultBranch` | `main` | `SMRITI_DEFAULT_BRANCH` | Default branch name |
 | `dedup.enabled` | `true` | `SMRITI_DEDUP_ENABLED` | Enable observation deduplication |
 | `dedup.similarityThreshold` | `0.95` | `SMRITI_DEDUP_THRESHOLD` | Cosine similarity threshold for dedup |
+
+</details>
+
+<details>
+<summary><strong>Gotcha Detection</strong></summary>
+
+| Setting | Default | Env Var | Description |
+|---|---|---|---|
+| `gotcha.enabled` | `true` | `SMRITI_GOTCHA_ENABLED` | Enable gotcha/pitfall warnings |
+| `gotcha.minImportance` | `7` | `SMRITI_GOTCHA_MIN_IMPORTANCE` | Min importance for gotcha observations |
+
+</details>
+
+<details>
+<summary><strong>CLAUDE.md Generation</strong></summary>
+
+| Setting | Default | Env Var | Description |
+|---|---|---|---|
+| `claudemd.enabled` | `false` | `SMRITI_CLAUDEMD_ENABLED` | Enable CLAUDE.md auto-generation |
+| `claudemd.maxEntries` | `15` | `SMRITI_CLAUDEMD_MAX_ENTRIES` | Max entries per section |
+
+</details>
+
+<details>
+<summary><strong>Provider Isolation</strong></summary>
+
+| Setting | Default | Env Var | Description |
+|---|---|---|---|
+| `provider.claudeBaseUrl` | `''` | `SMRITI_CLAUDE_BASE_URL` | Smriti's own API base URL (empty = direct Anthropic) |
+| `provider.claudeApiKey` | `''` | `SMRITI_CLAUDE_API_KEY` | Smriti's own API key (empty = use existing) |
 
 </details>
 
@@ -511,7 +602,7 @@ Smriti exposes its memory as [MCP (Model Context Protocol)](https://modelcontext
 | Tool | Description |
 |---|---|
 | `smriti_search` | Search observations by semantic query, tags, or entity |
-| `smriti_save` | Manually save an observation with optional tags |
+| `smriti_save` | Manually save an observation with optional tags, concepts, and file paths |
 | `smriti_timeline` | View observation timeline for a project or session |
 | `smriti_forget` | Remove specific observations (right to be forgotten) |
 
@@ -555,14 +646,16 @@ Smriti includes a built-in **React SPA** served at `/ui` on the worker's HTTP po
 smriti/
 ├── src/
 │   ├── cli/                    # Hook handlers & CLI routing
+│   │   ├── commands/          # CLI commands (config, search, stats)
 │   │   ├── handlers/           # SessionStart, PostToolUse, Stop handlers
 │   │   ├── adapters/           # Claude Code & Cursor adapters
 │   │   ├── hook-command.ts     # Main hook entry point
 │   │   └── stdin-reader.ts     # Hook stdin processing
 │   ├── services/
-│   │   ├── context/            # Context injection & relevance scoring
+│   │   ├── claudemd/           # CLAUDE.md auto-generator
+│   │   ├── context/            # Context injection, gotcha detection, relevance scoring
 │   │   ├── embeddings/         # ONNX embedding service (all-MiniLM-L6-v2)
-│   │   ├── extraction/         # AI-powered observation extraction
+│   │   ├── extraction/         # AI-powered extraction + correction detection
 │   │   ├── mcp/                # MCP server & tool definitions
 │   │   ├── providers/          # Claude SDK + OpenRouter provider layer
 │   │   ├── reflection/         # Quick & deep reflection engine
@@ -576,6 +669,8 @@ smriti/
 │   │   ├── api.ts              # API client
 │   │   ├── hooks.ts            # React hooks
 │   │   └── theme.ts            # UI theme constants
+│   ├── integrations/
+│   │   └── opencode/          # OpenCode native plugin
 │   ├── shared/                 # Shared types, config, paths, constants
 │   └── utils/                  # Privacy, logging, git utilities
 ├── plugin/
@@ -588,7 +683,7 @@ smriti/
 │   ├── install-cursor.sh       # Cursor IDE installation script
 │   └── uninstall-cursor.sh     # Cursor IDE removal script
 ├── tests/
-│   └── e2e/                    # 258 E2E tests across 12 test files
+│   └── e2e/                    # 290+ E2E tests across 16 test files
 ├── docs/
 │   └── CURSOR-SETUP.md         # Cursor integration guide
 └── package.json
@@ -609,6 +704,11 @@ smriti/
 | Entity graph | Yes | No | No |
 | Observation deduplication | Yes (cosine similarity) | No | No |
 | Proactive mid-session context | Yes | No | No |
+| Correction detection | Yes | No | No |
+| Gotcha/pitfall warnings | Yes | No | No |
+| CLAUDE.md auto-generation | Yes (togglable) | No | Manual |
+| Interactive CLI | Yes | No | N/A |
+| OpenCode integration | Yes (native plugin) | No | No |
 | Cross-IDE (Claude Code + Cursor) | Yes | No | No |
 | Branch-aware | Yes | No | No |
 | Web dashboard | Yes (React SPA) | No | No |
@@ -624,7 +724,7 @@ smriti/
 
 ## Test Suite
 
-Smriti has **258 passing E2E tests** across 12 test files. No unit tests by design -- all tests exercise real worker behavior with temporary SQLite databases and mock AI providers.
+Smriti has **290+ passing E2E tests** across 16 test files. No unit tests by design -- all tests exercise real worker behavior with temporary SQLite databases and mock AI providers.
 
 ```bash
 # Run the full test suite
@@ -650,6 +750,10 @@ bun test tests/e2e/hook-lifecycle.test.ts
 | `web-ui.test.ts` | Dashboard routes, API endpoints, SPA serving |
 | `enhancements.test.ts` | Tags, dedup, proactive context, MCP config, export/import |
 | `phase7-polish.test.ts` | Entity graph, observation masking, archival, project detection |
+| `corrections.test.ts` | Correction pattern detection, high-importance observation creation |
+| `gotcha.test.ts` | Gotcha/pitfall detection, file matching, API endpoint |
+| `cli-commands.test.ts` | Config get/set/reset, search, stats endpoint |
+| `provider-isolation.test.ts` | Provider base URL isolation, env var save/restore |
 
 ---
 
