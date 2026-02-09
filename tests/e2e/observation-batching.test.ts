@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { ObservationBatcher } from '../../src/services/extraction/batcher';
+import { getObservationsBySession } from '../../src/services/sqlite/observations';
+import { enqueuePendingMessage, getPendingCount } from '../../src/services/sqlite/pending-messages';
+import { insertPrompt } from '../../src/services/sqlite/prompts';
+import { createSession } from '../../src/services/sqlite/sessions';
+import { getSummaryBySession } from '../../src/services/sqlite/summaries';
 import { createTestContext } from '../fixtures/helpers';
 import { MockProvider } from '../fixtures/mock-provider';
-import { ObservationBatcher } from '../../src/services/extraction/batcher';
-import { createSession } from '../../src/services/sqlite/sessions';
-import { insertPrompt } from '../../src/services/sqlite/prompts';
-import { enqueuePendingMessage, getPendingCount } from '../../src/services/sqlite/pending-messages';
-import { getObservationsBySession } from '../../src/services/sqlite/observations';
-import { getSummaryBySession } from '../../src/services/sqlite/summaries';
 
 describe('Observation Batching E2E', () => {
   let ctx: ReturnType<typeof createTestContext>;
@@ -89,7 +89,7 @@ describe('Observation Batching E2E', () => {
     // Summary should be stored
     const summary = getSummaryBySession(ctx.db, session.id);
     expect(summary).toBeTruthy();
-    expect(summary!.request).toBeTruthy();
+    expect(summary?.request).toBeTruthy();
   });
 
   it('processes observations with correct data', async () => {

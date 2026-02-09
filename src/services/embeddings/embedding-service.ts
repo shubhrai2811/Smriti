@@ -1,8 +1,9 @@
-import { logger } from '../../utils/logger.js';
+import { getConfig } from '../../shared/config.js';
 import { MODELS_DIR } from '../../shared/paths.js';
+import { logger } from '../../utils/logger.js';
 
-const EMBEDDING_DIM = 384;
-const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
+let EMBEDDING_DIM = 384;
+let MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
 
 // We use dynamic import to avoid loading the heavy transformers library at startup
 let _pipeline: any = null;
@@ -19,6 +20,15 @@ export async function initEmbeddings(): Promise<void> {
 
   _initPromise = (async () => {
     try {
+      // Read model config (inside async init so config is available)
+      try {
+        const config = getConfig();
+        MODEL_ID = config.get('embeddings', 'model');
+        EMBEDDING_DIM = config.get('embeddings', 'dimensions');
+      } catch {
+        // Config not initialized yet, use defaults
+      }
+
       logger.info('EMBEDDINGS', 'Initializing embedding model...', { model: MODEL_ID });
 
       // Dynamic import to avoid loading at startup
@@ -52,6 +62,7 @@ export async function initEmbeddings(): Promise<void> {
 export async function embed(text: string): Promise<Float32Array> {
   if (!_ready) await initEmbeddings();
 
+  // biome-ignore lint/style/noNonNullAssertion: guaranteed initialized by initEmbeddings() check above
   const output = await _pipeline!(text, {
     pooling: 'mean',
     normalize: true,
@@ -71,6 +82,7 @@ export async function embedBatch(texts: string[]): Promise<Float32Array[]> {
   if (texts.length === 0) return [];
   if (!_ready) await initEmbeddings();
 
+  // biome-ignore lint/style/noNonNullAssertion: guaranteed initialized by initEmbeddings() check above
   const output = await _pipeline!(texts, {
     pooling: 'mean',
     normalize: true,
@@ -108,7 +120,9 @@ export function buildEmbeddableText(observation: {
       if (Array.isArray(facts) && facts.length > 0) {
         parts.push(facts.join('. '));
       }
-    } catch { /* ignore parse errors */ }
+    } catch {
+      /* ignore parse errors */
+    }
   }
 
   if (observation.concepts) {
@@ -117,7 +131,9 @@ export function buildEmbeddableText(observation: {
       if (Array.isArray(concepts) && concepts.length > 0) {
         parts.push(concepts.join(', '));
       }
-    } catch { /* ignore parse errors */ }
+    } catch {
+      /* ignore parse errors */
+    }
   }
 
   return parts.join(' | ');

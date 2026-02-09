@@ -13,7 +13,7 @@ export function enqueuePendingMessage(
     cwd?: string;
     lastAssistantMessage?: string;
     promptNumber?: number;
-  }
+  },
 ): number {
   const now = Date.now();
 
@@ -21,7 +21,7 @@ export function enqueuePendingMessage(
     `INSERT INTO pending_messages
        (session_id, content_session_id, message_type, tool_name, tool_input, tool_response, cwd, last_assistant_message, prompt_number, created_at_epoch)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     RETURNING id`
+     RETURNING id`,
   );
 
   const row = stmt.get(
@@ -34,37 +34,32 @@ export function enqueuePendingMessage(
     opts.cwd ?? null,
     opts.lastAssistantMessage ?? null,
     opts.promptNumber ?? null,
-    now
+    now,
   ) as { id: number };
 
   return row.id;
 }
 
-export function claimBatch(
-  db: Database,
-  sessionId: number,
-  batchSize: number
-): PendingMessageRow[] {
+export function claimBatch(db: Database, sessionId: number, batchSize: number): PendingMessageRow[] {
   // Atomically claim a batch: select pending messages and update them to processing
   const claimed = db.transaction(() => {
-    const rows = db.query(
-      `SELECT * FROM pending_messages
+    const rows = db
+      .query(
+        `SELECT * FROM pending_messages
        WHERE session_id = ? AND status = 'pending'
        ORDER BY created_at_epoch ASC
-       LIMIT ?`
-    ).all(sessionId, batchSize) as PendingMessageRow[];
+       LIMIT ?`,
+      )
+      .all(sessionId, batchSize) as PendingMessageRow[];
 
     if (rows.length === 0) return rows;
 
-    const ids = rows.map(r => r.id);
+    const ids = rows.map((r) => r.id);
     const placeholders = ids.map(() => '?').join(',');
-    db.run(
-      `UPDATE pending_messages SET status = 'processing' WHERE id IN (${placeholders})`,
-      ids
-    );
+    db.run(`UPDATE pending_messages SET status = 'processing' WHERE id IN (${placeholders})`, ids);
 
     // Return the rows with updated status
-    return rows.map(r => ({ ...r, status: 'processing' as const }));
+    return rows.map((r) => ({ ...r, status: 'processing' as const }));
   })();
 
   return claimed;
@@ -75,16 +70,11 @@ export function confirmProcessed(db: Database, messageId: number): void {
 }
 
 export function markFailed(db: Database, messageId: number): void {
-  db.run(
-    `UPDATE pending_messages SET status = 'failed', retry_count = retry_count + 1 WHERE id = ?`,
-    [messageId]
-  );
+  db.run(`UPDATE pending_messages SET status = 'failed', retry_count = retry_count + 1 WHERE id = ?`, [messageId]);
 }
 
 export function getPendingCount(db: Database, sessionId: number): number {
-  const stmt = db.query(
-    `SELECT COUNT(*) as count FROM pending_messages WHERE session_id = ? AND status = 'pending'`
-  );
+  const stmt = db.query(`SELECT COUNT(*) as count FROM pending_messages WHERE session_id = ? AND status = 'pending'`);
   const row = stmt.get(sessionId) as { count: number };
   return row.count;
 }
@@ -96,21 +86,17 @@ export function resetStaleProcessing(db: Database): number {
     `UPDATE pending_messages
      SET status = 'pending'
      WHERE status = 'processing' AND created_at_epoch < ?`,
-    [fiveMinutesAgo]
+    [fiveMinutesAgo],
   );
 
   return result.changes;
 }
 
-export function getFailedMessages(
-  db: Database,
-  sessionId: number,
-  maxRetries: number
-): PendingMessageRow[] {
+export function getFailedMessages(db: Database, sessionId: number, maxRetries: number): PendingMessageRow[] {
   const stmt = db.query(
     `SELECT * FROM pending_messages
      WHERE session_id = ? AND status = 'failed' AND retry_count < ?
-     ORDER BY created_at_epoch ASC`
+     ORDER BY created_at_epoch ASC`,
   );
   return stmt.all(sessionId, maxRetries) as PendingMessageRow[];
 }

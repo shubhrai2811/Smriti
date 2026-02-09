@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createTestContext } from '../fixtures/helpers';
 
 describe('Hook Lifecycle E2E', () => {
@@ -15,14 +15,14 @@ describe('Hook Lifecycle E2E', () => {
   it('health endpoint responds', async () => {
     const res = await fetch(`${ctx.baseUrl}/health`);
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.status).toBe('ok');
   });
 
   it('readiness endpoint returns ready after init', async () => {
     const res = await fetch(`${ctx.baseUrl}/readiness`);
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.status).toBe('ready');
   });
 
@@ -49,7 +49,7 @@ describe('Hook Lifecycle E2E', () => {
       }),
     });
     expect(initRes.status).toBe(200);
-    const initBody = await initRes.json() as any;
+    const initBody = (await initRes.json()) as any;
     expect(initBody.sessionId).toBeGreaterThan(0);
     expect(initBody.promptNumber).toBe(1);
 
@@ -67,7 +67,7 @@ describe('Hook Lifecycle E2E', () => {
         }),
       });
       expect(obsRes.status).toBe(202);
-      const obsBody = await obsRes.json() as any;
+      const obsBody = (await obsRes.json()) as any;
       expect(obsBody.queued).toBe(true);
     }
 
@@ -83,7 +83,7 @@ describe('Hook Lifecycle E2E', () => {
         cwd: project,
       }),
     });
-    const lastObsBody = await lastObs.json() as any;
+    const lastObsBody = (await lastObs.json()) as any;
     expect(lastObsBody.pendingCount).toBe(4);
 
     // 4. Summarize (queues summary message)
@@ -96,7 +96,7 @@ describe('Hook Lifecycle E2E', () => {
       }),
     });
     expect(sumRes.status).toBe(200);
-    const sumBody = await sumRes.json() as any;
+    const sumBody = (await sumRes.json()) as any;
     expect(sumBody.queued).toBe(true);
 
     // 5. Complete session
@@ -106,7 +106,7 @@ describe('Hook Lifecycle E2E', () => {
       body: JSON.stringify({ contentSessionId: sessionId }),
     });
     expect(completeRes.status).toBe(200);
-    const completeBody = await completeRes.json() as any;
+    const completeBody = (await completeRes.json()) as any;
     expect(completeBody.completed).toBe(true);
 
     // 6. Verify session completed in DB
@@ -135,14 +135,14 @@ describe('Hook Lifecycle E2E', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contentSessionId: sessionId, project, prompt: 'First' }),
     });
-    const body1 = await res1.json() as any;
+    const body1 = (await res1.json()) as any;
 
     const res2 = await fetch(`${ctx.baseUrl}/sessions/init`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contentSessionId: sessionId, project, prompt: 'Second' }),
     });
-    const body2 = await res2.json() as any;
+    const body2 = (await res2.json()) as any;
 
     expect(body1.sessionId).toBe(body2.sessionId);
     expect(body2.promptNumber).toBe(2);

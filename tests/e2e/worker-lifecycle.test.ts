@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createTestContext } from '../fixtures/helpers';
 
 describe('Worker Lifecycle E2E', () => {
@@ -15,7 +15,7 @@ describe('Worker Lifecycle E2E', () => {
   it('worker starts and responds to health check', async () => {
     const res = await fetch(`${ctx.baseUrl}/health`);
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.status).toBe('ok');
     expect(body.uptime).toBeGreaterThanOrEqual(0);
   });
@@ -23,7 +23,7 @@ describe('Worker Lifecycle E2E', () => {
   it('readiness endpoint works when ready', async () => {
     const res = await fetch(`${ctx.baseUrl}/readiness`);
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.status).toBe('ready');
   });
 
@@ -31,20 +31,20 @@ describe('Worker Lifecycle E2E', () => {
     ctx.state.isReady = false;
     const res = await fetch(`${ctx.baseUrl}/readiness`);
     expect(res.status).toBe(503);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.status).toBe('initializing');
   });
 
   it('version endpoint responds', async () => {
     const res = await fetch(`${ctx.baseUrl}/version`);
     expect(res.status).toBe(200);
-    const body = await res.json() as any;
+    const body = (await res.json()) as any;
     expect(body.version).toBeTruthy();
   });
 
   it('activity tracking updates lastActivityAt', async () => {
     const before = ctx.state.lastActivityAt;
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
     await fetch(`${ctx.baseUrl}/health`);
     expect(ctx.state.lastActivityAt).toBeGreaterThanOrEqual(before);
   });
@@ -52,19 +52,19 @@ describe('Worker Lifecycle E2E', () => {
   it('data endpoints return paginated results', async () => {
     const sessionsRes = await fetch(`${ctx.baseUrl}/data/sessions`);
     expect(sessionsRes.status).toBe(200);
-    const sessionsBody = await sessionsRes.json() as any;
+    const sessionsBody = (await sessionsRes.json()) as any;
     expect(Array.isArray(sessionsBody.sessions)).toBe(true);
 
     const obsRes = await fetch(`${ctx.baseUrl}/data/observations`);
     expect(obsRes.status).toBe(200);
-    const obsBody = await obsRes.json() as any;
+    const obsBody = (await obsRes.json()) as any;
     expect(Array.isArray(obsBody.observations)).toBe(true);
   });
 
   it('settings endpoint returns current settings', async () => {
     const res = await fetch(`${ctx.baseUrl}/settings`);
     expect(res.status).toBe(200);
-    const settings = await res.json() as any;
+    const settings = (await res.json()) as any;
     expect(settings.worker).toBeTruthy();
     expect(settings.extraction).toBeTruthy();
     expect(settings.context).toBeTruthy();
@@ -74,7 +74,7 @@ describe('Worker Lifecycle E2E', () => {
 
   it('CORS headers are present', async () => {
     const res = await fetch(`${ctx.baseUrl}/health`, {
-      headers: { 'Origin': 'http://localhost' },
+      headers: { Origin: 'http://localhost' },
     });
     // Hono CORS middleware should add headers
     expect(res.status).toBe(200);

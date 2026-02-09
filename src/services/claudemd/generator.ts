@@ -1,11 +1,11 @@
 import type { Database } from 'bun:sqlite';
-import { readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
+import { readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { getProfileByProject } from '../sqlite/developer-profile.js';
-import { getReflectionsByProject } from '../sqlite/reflections.js';
-import { getRecentObservations } from '../sqlite/observations.js';
 import { getConfig } from '../../shared/config.js';
 import { logger } from '../../utils/logger.js';
+import { getProfileByProject } from '../sqlite/developer-profile.js';
+import { getRecentObservations } from '../sqlite/observations.js';
+import { getReflectionsByProject } from '../sqlite/reflections.js';
 
 const SMRITI_START_TAG = '<!-- smriti-context:start -->';
 const SMRITI_END_TAG = '<!-- smriti-context:end -->';
@@ -16,8 +16,9 @@ export function generateClaudeMdSection(db: Database, project: string): string {
 
   const profile = getProfileByProject(db, project, { limit: maxEntries });
   const reflections = getReflectionsByProject(db, project, { limit: 5 });
-  const patterns = getRecentObservations(db, project, { limit: 20 })
-    .filter(o => o.importance >= 7 && ['pattern', 'decision', 'bugfix'].includes(o.type));
+  const patterns = getRecentObservations(db, project, { limit: 20 }).filter(
+    (o) => o.importance >= 7 && ['pattern', 'decision', 'bugfix'].includes(o.type),
+  );
 
   const sections: string[] = [];
   sections.push(SMRITI_START_TAG);
@@ -39,11 +40,24 @@ export function generateClaudeMdSection(db: Database, project: string): string {
     sections.push('');
   }
 
-  if (patterns.length > 0) {
-    sections.push('### Important Patterns & Decisions\n');
-    for (const p of patterns.slice(0, maxEntries)) {
+  // Split patterns into global and project-scoped
+  const globalPatterns = patterns.filter((p) => (p as any).scope === 'global');
+  const projectPatterns = patterns.filter((p) => (p as any).scope !== 'global');
+
+  if (globalPatterns.length > 0) {
+    sections.push('### Global Preferences\n');
+    for (const p of globalPatterns.slice(0, maxEntries)) {
       const facts: string[] = p.facts ? JSON.parse(p.facts) : [];
-      sections.push(`- **[${p.type}]** ${p.title}${facts[0] ? ': ' + facts[0] : ''}`);
+      sections.push(`- [global] **[${p.type}]** ${p.title}${facts[0] ? `: ${facts[0]}` : ''}`);
+    }
+    sections.push('');
+  }
+
+  if (projectPatterns.length > 0) {
+    sections.push('### Important Patterns & Decisions\n');
+    for (const p of projectPatterns.slice(0, maxEntries)) {
+      const facts: string[] = p.facts ? JSON.parse(p.facts) : [];
+      sections.push(`- **[${p.type}]** ${p.title}${facts[0] ? `: ${facts[0]}` : ''}`);
     }
     sections.push('');
   }
@@ -70,14 +84,14 @@ export function updateClaudeMd(projectDir: string, newSection: string): void {
     content = content.slice(0, startIdx) + newSection + content.slice(endIdx + SMRITI_END_TAG.length);
   } else if (content.trim()) {
     // Append to existing file
-    content = content.trimEnd() + '\n\n' + newSection + '\n';
+    content = `${content.trimEnd()}\n\n${newSection}\n`;
   } else {
     // New file
-    content = newSection + '\n';
+    content = `${newSection}\n`;
   }
 
   // Atomic write: write to temp file, then rename
-  const tmpPath = filePath + '.smriti-tmp';
+  const tmpPath = `${filePath}.smriti-tmp`;
   try {
     writeFileSync(tmpPath, content, 'utf-8');
     renameSync(tmpPath, filePath);
@@ -85,6 +99,8 @@ export function updateClaudeMd(projectDir: string, newSection: string): void {
   } catch (error) {
     logger.warn('CLAUDEMD', 'Failed to write CLAUDE.md', { error: (error as Error).message });
     // Clean up temp file
-    try { unlinkSync(tmpPath); } catch {}
+    try {
+      unlinkSync(tmpPath);
+    } catch {}
   }
 }

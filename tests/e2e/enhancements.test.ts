@@ -1,18 +1,28 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestContext, type TestContext } from '../fixtures/helpers';
-import { addTag, removeTag, getTagsByObservation, getObservationsByTag, getAllTags, updateRetrievalTracking } from '../../src/services/sqlite/tags';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { exportProject, importProject, type SmritiExport } from '../../src/services/sqlite/export-import';
+import {
+  addTag,
+  getAllTags,
+  getObservationsByTag,
+  getTagsByObservation,
+  removeTag,
+  updateRetrievalTracking,
+} from '../../src/services/sqlite/tags';
 import { getProjectIdentifier } from '../../src/utils/git';
+import { createTestContext, type TestContext } from '../fixtures/helpers';
 
 // Helper to seed a session + observation
-function seedSessionAndObservation(ctx: TestContext, opts?: {
-  project?: string;
-  createdAtEpoch?: number;
-  type?: string;
-  title?: string;
-  contentSessionId?: string;
-  facts?: string;
-}) {
+function seedSessionAndObservation(
+  ctx: TestContext,
+  opts?: {
+    project?: string;
+    createdAtEpoch?: number;
+    type?: string;
+    title?: string;
+    contentSessionId?: string;
+    facts?: string;
+  },
+) {
   const project = opts?.project || '/tmp/test-proj';
   const epoch = opts?.createdAtEpoch || Date.now();
   const contentSessionId = opts?.contentSessionId || `sess-${epoch}-${Math.random().toString(36).slice(2)}`;
@@ -20,14 +30,23 @@ function seedSessionAndObservation(ctx: TestContext, opts?: {
   ctx.db.run(
     `INSERT OR IGNORE INTO sessions (content_session_id, project, branch, source_ide, status, created_at_epoch, prompt_count)
      VALUES (?, ?, 'main', 'claude-code', 'active', ?, 1)`,
-    [contentSessionId, project, epoch]
+    [contentSessionId, project, epoch],
   );
-  const session = ctx.db.query('SELECT id FROM sessions WHERE content_session_id = ?').get(contentSessionId) as { id: number };
+  const session = ctx.db.query('SELECT id FROM sessions WHERE content_session_id = ?').get(contentSessionId) as {
+    id: number;
+  };
 
   ctx.db.run(
     `INSERT INTO observations (session_id, project, branch, source_ide, type, title, facts, concepts, files_affected, importance, created_at_epoch)
      VALUES (?, ?, 'main', 'claude-code', ?, ?, ?, '["concept1"]', '["src/index.ts"]', 7, ?)`,
-    [session.id, project, opts?.type || 'discovery', opts?.title || 'Test observation', opts?.facts || '["fact1"]', epoch]
+    [
+      session.id,
+      project,
+      opts?.type || 'discovery',
+      opts?.title || 'Test observation',
+      opts?.facts || '["fact1"]',
+      epoch,
+    ],
   );
   const obs = ctx.db.query('SELECT last_insert_rowid() as id').get() as { id: number };
 
@@ -62,7 +81,7 @@ describe('Enhancements', () => {
       addTag(ctx.db, observationId, 'bug');
 
       const tags = getTagsByObservation(ctx.db, observationId);
-      expect(tags.filter(t => t === 'bug').length).toBe(1);
+      expect(tags.filter((t) => t === 'bug').length).toBe(1);
     });
 
     it('removeTag deletes a tag', () => {
@@ -111,9 +130,9 @@ describe('Enhancements', () => {
 
       const tags = getAllTags(ctx.db, project);
       expect(tags.length).toBe(2);
-      const bugTag = tags.find(t => t.tag === 'bug');
+      const bugTag = tags.find((t) => t.tag === 'bug');
       expect(bugTag?.count).toBe(2);
-      const secTag = tags.find(t => t.tag === 'security');
+      const secTag = tags.find((t) => t.tag === 'security');
       expect(secTag?.count).toBe(1);
     });
 
@@ -122,7 +141,9 @@ describe('Enhancements', () => {
       updateRetrievalTracking(ctx.db, [observationId]);
       updateRetrievalTracking(ctx.db, [observationId]);
 
-      const row = ctx.db.query('SELECT retrieval_count, last_retrieved_epoch FROM observations WHERE id = ?').get(observationId) as any;
+      const row = ctx.db
+        .query('SELECT retrieval_count, last_retrieved_epoch FROM observations WHERE id = ?')
+        .get(observationId) as any;
       expect(row.retrieval_count).toBe(2);
       expect(row.last_retrieved_epoch).toBeGreaterThan(0);
     });
@@ -144,7 +165,7 @@ describe('Enhancements', () => {
         body: JSON.stringify({ tag: 'important' }),
       });
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.ok).toBe(true);
 
       const tags = getTagsByObservation(ctx.db, observationId);
@@ -171,7 +192,7 @@ describe('Enhancements', () => {
 
       const res = await fetch(`${ctx.baseUrl}/data/observations/${observationId}/tags`);
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.tags.length).toBe(2);
     });
 
@@ -185,7 +206,7 @@ describe('Enhancements', () => {
 
       const res = await fetch(`${ctx.baseUrl}/data/tags?project=${encodeURIComponent(project)}`);
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.tags.length).toBe(2);
       expect(body.tags[0].tag).toBe('bug');
       expect(body.tags[0].count).toBe(2);
@@ -260,7 +281,7 @@ describe('Enhancements', () => {
       const res = await fetch(`${ctx.baseUrl}/admin/export?project=${encodeURIComponent(project)}`);
       expect(res.status).toBe(200);
 
-      const body = await res.json() as SmritiExport;
+      const body = (await res.json()) as SmritiExport;
       expect(body.version).toBe(1);
       expect(body.observations.length).toBe(1);
     });
@@ -280,26 +301,31 @@ describe('Enhancements', () => {
         version: 1,
         exportedAt: new Date().toISOString(),
         project,
-        sessions: [{
-          contentSessionId: 'import-sess-1',
-          project,
-          branch: 'main',
-          sourceIde: 'claude-code',
-          status: 'completed',
-          createdAtEpoch: Date.now(),
-        }],
-        observations: [{
-          type: 'discovery',
-          title: 'Imported observation',
-          facts: '["imported fact"]',
-          concepts: null,
-          filesAffected: null,
-          importance: 8,
-          branch: 'main',
-          sourceIde: 'claude-code',
-          createdAtEpoch: Date.now(),
-          sessionContentId: 'import-sess-1',
-        }],
+        sessions: [
+          {
+            contentSessionId: 'import-sess-1',
+            project,
+            branch: 'main',
+            sourceIde: 'claude-code',
+            status: 'completed',
+            createdAtEpoch: Date.now(),
+          },
+        ],
+        observations: [
+          {
+            type: 'discovery',
+            title: 'Imported observation',
+            facts: '["imported fact"]',
+            concepts: null,
+            filesAffected: null,
+            importance: 8,
+            scope: 'project',
+            branch: 'main',
+            sourceIde: 'claude-code',
+            createdAtEpoch: Date.now(),
+            sessionContentId: 'import-sess-1',
+          },
+        ],
         summaries: [],
         reflections: [],
         profileEntries: [],
@@ -312,7 +338,7 @@ describe('Enhancements', () => {
         body: JSON.stringify(exportData),
       });
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.status).toBe('import_complete');
       expect(body.imported.sessions).toBe(1);
       expect(body.imported.observations).toBe(1);
@@ -324,7 +350,7 @@ describe('Enhancements', () => {
 
       // Export via API
       const exportRes = await fetch(`${ctx.baseUrl}/admin/export?project=${encodeURIComponent(project)}`);
-      const exported = await exportRes.json() as SmritiExport;
+      const exported = (await exportRes.json()) as SmritiExport;
 
       // Import into fresh context
       const ctx2 = createTestContext();
@@ -337,8 +363,10 @@ describe('Enhancements', () => {
         expect(importRes.status).toBe(200);
 
         // Verify round-trip
-        const verifyRes = await fetch(`http://127.0.0.1:${ctx2.server.port}/admin/export?project=${encodeURIComponent(project)}`);
-        const reimported = await verifyRes.json() as SmritiExport;
+        const verifyRes = await fetch(
+          `http://127.0.0.1:${ctx2.server.port}/admin/export?project=${encodeURIComponent(project)}`,
+        );
+        const reimported = (await verifyRes.json()) as SmritiExport;
         expect(reimported.observations.length).toBe(exported.observations.length);
         expect(reimported.observations[0].title).toBe('Round trip test');
       } finally {
@@ -376,7 +404,9 @@ describe('Enhancements', () => {
   describe('MCP Server Configuration', () => {
     it('mcp-config.json exists and is valid', async () => {
       const { readFileSync } = await import('fs');
-      const config = JSON.parse(readFileSync('/Users/prolevelnoob/CodePlayground/prsnl/claude-memory/plugin/mcp-config.json', 'utf-8'));
+      const config = JSON.parse(
+        readFileSync('/Users/prolevelnoob/CodePlayground/prsnl/claude-memory/plugin/mcp-config.json', 'utf-8'),
+      );
       expect(config.mcpServers.smriti).toBeDefined();
       expect(config.mcpServers.smriti.command).toBe('bun');
       expect(config.mcpServers.smriti.args).toContain('mcp');
@@ -393,7 +423,9 @@ describe('Enhancements', () => {
 
     it('uninstall script exists and is valid bash', async () => {
       const { existsSync } = await import('fs');
-      expect(existsSync('/Users/prolevelnoob/CodePlayground/prsnl/claude-memory/scripts/uninstall-cursor.sh')).toBe(true);
+      expect(existsSync('/Users/prolevelnoob/CodePlayground/prsnl/claude-memory/scripts/uninstall-cursor.sh')).toBe(
+        true,
+      );
     });
 
     it('setup documentation exists', async () => {
@@ -443,7 +475,7 @@ describe('Enhancements', () => {
         }),
       });
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.promptNumber).toBe(1);
       // First prompt should not have proactive context
       expect(body.proactiveContext).toBeUndefined();
@@ -472,7 +504,7 @@ describe('Enhancements', () => {
         }),
       });
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.promptNumber).toBe(2);
       // proactiveContext may or may not be present (depends on observations existing)
       // but the field should be handleable either way

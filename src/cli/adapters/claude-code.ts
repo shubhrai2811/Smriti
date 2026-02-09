@@ -1,4 +1,4 @@
-import type { PlatformAdapter, NormalizedHookInput, HookResult } from '../types.js';
+import type { HookResult, NormalizedHookInput, PlatformAdapter } from '../types.js';
 
 export const claudeCodeAdapter: PlatformAdapter = {
   normalizeInput(raw: unknown): NormalizedHookInput {

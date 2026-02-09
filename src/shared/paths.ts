@@ -1,5 +1,5 @@
-import { join } from 'path';
 import { homedir } from 'os';
+import { join } from 'path';
 
 export const SMRITI_DIR = join(homedir(), '.smriti');
 export const DB_PATH = join(SMRITI_DIR, 'smriti.sqlite');

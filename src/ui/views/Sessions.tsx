@@ -1,19 +1,32 @@
 import { useState } from 'react';
 import { useApi } from '../hooks.js';
-import { colors, statusColors, typeColors, baseStyles, formatTime, formatDate, parseJsonArray } from '../theme.js';
-import type { SessionsResponse, SessionRow, ObservationsResponse, ObservationRow } from '../types.js';
+import { baseStyles, colors, formatDate, formatTime, parseJsonArray, statusColors, typeColors } from '../theme.js';
+import type { ObservationRow, ObservationsResponse, SessionRow, SessionsResponse } from '../types.js';
 
-function SessionCard({ session, onSelect, isSelected }: { session: SessionRow; onSelect: (id: number | null) => void; isSelected: boolean }) {
+function SessionCard({
+  session,
+  onSelect,
+  isSelected,
+}: {
+  session: SessionRow;
+  onSelect: (id: number | null) => void;
+  isSelected: boolean;
+}) {
   const statusColor = statusColors[session.status] || colors.textSecondary;
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       style={{
         ...baseStyles.card,
         cursor: 'pointer',
-        borderColor: isSelected ? colors.accentBlue + '60' : colors.border,
+        borderColor: isSelected ? `${colors.accentBlue}60` : colors.border,
       }}
       onClick={() => onSelect(isSelected ? null : session.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onSelect(isSelected ? null : session.id);
+      }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
@@ -23,9 +36,7 @@ function SessionCard({ session, onSelect, isSelected }: { session: SessionRow; o
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
-          <span style={{ fontSize: '12px', color: colors.textSecondary }}>
-            {session.prompt_count} prompts
-          </span>
+          <span style={{ fontSize: '12px', color: colors.textSecondary }}>{session.prompt_count} prompts</span>
           <span style={baseStyles.timestamp}>{formatTime(session.created_at_epoch)}</span>
         </div>
       </div>
@@ -55,18 +66,14 @@ function SessionCard({ session, onSelect, isSelected }: { session: SessionRow; o
 function SessionObservations({ sessionId }: { sessionId: number }) {
   // We fetch all observations and filter client-side by session_id
   // since there's no direct session-observations endpoint in data routes
-  const { data, loading, error } = useApi<ObservationsResponse>(
-    '/data/observations',
-    { project: '', limit: '200' },
-  );
+  const { data, loading, error } = useApi<ObservationsResponse>('/data/observations', { project: '', limit: '200' });
 
-  const observations = (data?.observations ?? []).filter(
-    (obs: ObservationRow) => obs.session_id === sessionId,
-  );
+  const observations = (data?.observations ?? []).filter((obs: ObservationRow) => obs.session_id === sessionId);
 
   if (loading) return <div style={{ ...baseStyles.loadingState, padding: '16px' }}>Loading...</div>;
   if (error) return <div style={baseStyles.errorState}>{error}</div>;
-  if (observations.length === 0) return <div style={{ ...baseStyles.emptyState, padding: '16px' }}>No observations for this session.</div>;
+  if (observations.length === 0)
+    return <div style={{ ...baseStyles.emptyState, padding: '16px' }}>No observations for this session.</div>;
 
   return (
     <div style={{ marginBottom: '16px', paddingLeft: '16px', borderLeft: `2px solid ${colors.accentBlue}40` }}>
@@ -94,8 +101,10 @@ function SessionObservations({ sessionId }: { sessionId: number }) {
             </div>
             {facts.length > 0 && (
               <ul style={{ margin: '6px 0 0 0', paddingLeft: '16px' }}>
-                {facts.slice(0, 3).map((fact, i) => (
-                  <li key={i} style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '2px' }}>{fact}</li>
+                {facts.slice(0, 3).map((fact) => (
+                  <li key={fact} style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '2px' }}>
+                    {fact}
+                  </li>
                 ))}
                 {facts.length > 3 && (
                   <li style={{ fontSize: '12px', color: colors.textMuted }}>+{facts.length - 3} more</li>
@@ -113,11 +122,7 @@ export function Sessions() {
   const [project, setProject] = useState('');
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
 
-  const { data, loading, error } = useApi<SessionsResponse>(
-    '/data/sessions',
-    { project, limit: '30' },
-    30_000,
-  );
+  const { data, loading, error } = useApi<SessionsResponse>('/data/sessions', { project, limit: '30' }, 30_000);
 
   const sessions = data?.sessions ?? [];
 
@@ -137,20 +142,12 @@ export function Sessions() {
 
       {loading && <div style={baseStyles.loadingState}>Loading sessions...</div>}
       {error && <div style={baseStyles.errorState}>{error}</div>}
-      {!loading && !error && sessions.length === 0 && (
-        <div style={baseStyles.emptyState}>No sessions found.</div>
-      )}
+      {!loading && !error && sessions.length === 0 && <div style={baseStyles.emptyState}>No sessions found.</div>}
 
       {sessions.map((session) => (
         <div key={session.id}>
-          <SessionCard
-            session={session}
-            onSelect={setSelectedSession}
-            isSelected={selectedSession === session.id}
-          />
-          {selectedSession === session.id && (
-            <SessionObservations sessionId={session.id} />
-          )}
+          <SessionCard session={session} onSelect={setSelectedSession} isSelected={selectedSession === session.id} />
+          {selectedSession === session.id && <SessionObservations sessionId={session.id} />}
         </div>
       ))}
     </div>

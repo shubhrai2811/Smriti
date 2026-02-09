@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
-import { useHashRoute, useApi } from './hooks.js';
+import { useApi, useHashRoute } from './hooks.js';
 import { colors, formatUptime } from './theme.js';
-import { Timeline } from './views/Timeline.js';
-import { Sessions } from './views/Sessions.js';
-import { Search } from './views/Search.js';
-import { Reflections } from './views/Reflections.js';
-import { Profile } from './views/Profile.js';
-import { Settings } from './views/Settings.js';
-import { Metrics } from './views/Metrics.js';
-import { Entities } from './views/Entities.js';
 import type { HealthResponse, VersionResponse } from './types.js';
+import { Entities } from './views/Entities.js';
+import { Metrics } from './views/Metrics.js';
+import { Profile } from './views/Profile.js';
+import { Reflections } from './views/Reflections.js';
+import { Search } from './views/Search.js';
+import { Sessions } from './views/Sessions.js';
+import { Settings } from './views/Settings.js';
+import { Timeline } from './views/Timeline.js';
 
 // Navigation items
 const NAV_ITEMS = [
@@ -66,15 +66,9 @@ function HealthIndicator() {
         }}
       />
       <span style={{ fontSize: '12px', color: colors.textSecondary }}>
-        {isHealthy
-          ? `Up ${formatUptime(health?.uptime ?? 0)}`
-          : 'Connecting...'}
+        {isHealthy ? `Up ${formatUptime(health?.uptime ?? 0)}` : 'Connecting...'}
       </span>
-      {version && (
-        <span style={{ fontSize: '11px', color: colors.textMuted }}>
-          v{version.version}
-        </span>
-      )}
+      {version && <span style={{ fontSize: '11px', color: colors.textMuted }}>v{version.version}</span>}
     </div>
   );
 }
@@ -112,12 +106,11 @@ function Sidebar({ activeRoute }: { activeRoute: string }) {
             <div style={{ fontSize: '16px', fontWeight: 700, color: colors.textPrimary, letterSpacing: '0.5px' }}>
               Smriti
             </div>
-            <div style={{ fontSize: '11px', color: colors.textMuted }}>
-              Memory Dashboard
-            </div>
+            <div style={{ fontSize: '11px', color: colors.textMuted }}>Memory Dashboard</div>
           </div>
         )}
         <button
+          type="button"
           onClick={() => setCollapsed(!collapsed)}
           style={{
             background: 'none',

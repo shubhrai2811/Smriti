@@ -1,7 +1,7 @@
 import { mkdirSync } from 'fs';
 import { SMRITI_DIR } from '../../shared/paths.js';
-import { getDatabase } from '../sqlite/database.js';
 import { logger } from '../../utils/logger.js';
+import { getDatabase } from '../sqlite/database.js';
 import { startMcpServer } from './mcp-server.js';
 
 /**

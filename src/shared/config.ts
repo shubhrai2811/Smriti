@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
-import { SETTINGS_PATH, SMRITI_DIR } from './paths.js';
+import { SETTINGS_PATH } from './paths.js';
 
 export interface SmritiSettings {
   worker: {
@@ -42,7 +42,7 @@ export interface SmritiSettings {
   };
   masking: {
     enabled: boolean;
-    briefThreshold: number;  // sessions ago to switch to brief
+    briefThreshold: number; // sessions ago to switch to brief
     minimalThreshold: number; // sessions ago to switch to minimal
   };
   privacy: {
@@ -51,13 +51,13 @@ export interface SmritiSettings {
   };
   dedup: {
     enabled: boolean;
-    similarityThreshold: number;  // cosine similarity threshold (0.0-1.0)
+    similarityThreshold: number; // cosine similarity threshold (0.0-1.0)
   };
   proactive: {
     enabled: boolean;
-    minSimilarity: number;     // minimum similarity threshold (0-1) for mid-session injection
-    maxObservations: number;   // max observations to inject mid-session
-    tokenBudget: number;       // max tokens for mid-session context
+    minSimilarity: number; // minimum similarity threshold (0-1) for mid-session injection
+    maxObservations: number; // max observations to inject mid-session
+    tokenBudget: number; // max tokens for mid-session context
   };
   archival: {
     retentionDays: number;
@@ -66,6 +66,10 @@ export interface SmritiSettings {
   gotcha: {
     enabled: boolean;
     minImportance: number;
+  };
+  embeddings: {
+    model: string;
+    dimensions: number;
   };
   claudemd: {
     enabled: boolean;
@@ -141,8 +145,12 @@ const DEFAULT_SETTINGS: SmritiSettings = {
     enabled: true,
     minImportance: 7,
   },
+  embeddings: {
+    model: 'Xenova/all-MiniLM-L6-v2',
+    dimensions: 384,
+  },
   claudemd: {
-    enabled: false,
+    enabled: true,
     maxEntries: 15,
   },
   log: {
@@ -152,49 +160,141 @@ const DEFAULT_SETTINGS: SmritiSettings = {
 
 // Environment variable overrides mapping
 const ENV_OVERRIDES: Record<string, (settings: SmritiSettings, value: string) => void> = {
-  SMRITI_WORKER_PORT: (s, v) => { s.worker.port = parseInt(v, 10); },
-  SMRITI_WORKER_HOST: (s, v) => { s.worker.host = v; },
-  SMRITI_IDLE_TIMEOUT: (s, v) => { s.worker.idleTimeoutMinutes = parseInt(v, 10); },
-  SMRITI_BATCH_SIZE: (s, v) => { s.extraction.batchSize = parseInt(v, 10); },
-  SMRITI_MAX_WAIT_SECONDS: (s, v) => { s.extraction.maxWaitSeconds = parseInt(v, 10); },
-  SMRITI_EXTRACTION_MODEL: (s, v) => { s.extraction.model = v; },
-  SMRITI_MAX_RETRIES: (s, v) => { s.extraction.maxRetries = parseInt(v, 10); },
-  SMRITI_TOKEN_BUDGET: (s, v) => { s.context.tokenBudget = parseInt(v, 10); },
-  SMRITI_INLINE_SUMMARY: (s, v) => { s.context.showInlineSummary = v === 'true'; },
-  SMRITI_REDACT_SECRETS: (s, v) => { s.privacy.redactSecrets = v === 'true'; },
-  SMRITI_STRIP_PRIVATE: (s, v) => { s.privacy.stripPrivateTags = v === 'true'; },
-  SMRITI_VECTOR_WEIGHT: (s, v) => { s.scoring.vectorWeight = parseFloat(v); },
-  SMRITI_RECENCY_WEIGHT: (s, v) => { s.scoring.recencyWeight = parseFloat(v); },
-  SMRITI_IMPORTANCE_WEIGHT: (s, v) => { s.scoring.importanceWeight = parseFloat(v); },
-  SMRITI_DEDUPE_THRESHOLD: (s, v) => { s.scoring.dedupeThreshold = parseFloat(v); },
-  SMRITI_REFLECTION_ENABLED: (s, v) => { s.reflection.enabled = v === 'true'; },
-  SMRITI_DEEP_REFLECTION_INTERVAL: (s, v) => { s.reflection.deepReflectionInterval = parseInt(v, 10); },
-  SMRITI_AUTO_LINKING_ENABLED: (s, v) => { s.reflection.autoLinkingEnabled = v === 'true'; },
-  SMRITI_AUTO_LINK_THRESHOLD: (s, v) => { s.reflection.autoLinkThreshold = parseFloat(v); },
-  SMRITI_PROVIDER_PRIMARY: (s, v) => { s.provider.primary = v; },
-  OPENROUTER_API_KEY: (s, v) => { s.provider.openrouterApiKey = v; },
-  SMRITI_OPENROUTER_MODEL: (s, v) => { s.provider.openrouterModel = v; },
-  SMRITI_FALLBACK_ENABLED: (s, v) => { s.provider.fallbackEnabled = v === 'true'; },
-  SMRITI_FAILURE_THRESHOLD: (s, v) => { s.provider.failureThreshold = parseInt(v, 10); },
-  SMRITI_COOLDOWN_MINUTES: (s, v) => { s.provider.cooldownMinutes = parseInt(v, 10); },
-  SMRITI_CLAUDE_BASE_URL: (s, v) => { s.provider.claudeBaseUrl = v; },
-  SMRITI_CLAUDE_API_KEY: (s, v) => { s.provider.claudeApiKey = v; },
-  SMRITI_MASKING_ENABLED: (s, v) => { s.masking.enabled = v === 'true'; },
-  SMRITI_MASKING_BRIEF_THRESHOLD: (s, v) => { s.masking.briefThreshold = parseInt(v, 10); },
-  SMRITI_MASKING_MINIMAL_THRESHOLD: (s, v) => { s.masking.minimalThreshold = parseInt(v, 10); },
-  SMRITI_DEDUP_ENABLED: (s, v) => { s.dedup.enabled = v === 'true'; },
-  SMRITI_DEDUP_THRESHOLD: (s, v) => { s.dedup.similarityThreshold = parseFloat(v); },
-  SMRITI_PROACTIVE_ENABLED: (s, v) => { s.proactive.enabled = v === 'true'; },
-  SMRITI_PROACTIVE_MIN_SIMILARITY: (s, v) => { s.proactive.minSimilarity = parseFloat(v); },
-  SMRITI_PROACTIVE_MAX_OBSERVATIONS: (s, v) => { s.proactive.maxObservations = parseInt(v, 10); },
-  SMRITI_PROACTIVE_TOKEN_BUDGET: (s, v) => { s.proactive.tokenBudget = parseInt(v, 10); },
-  SMRITI_RETENTION_DAYS: (s, v) => { s.archival.retentionDays = parseInt(v, 10); },
-  SMRITI_VACUUM_ON_MAINTENANCE: (s, v) => { s.archival.vacuumOnMaintenance = v === 'true'; },
-  SMRITI_GOTCHA_ENABLED: (s, v) => { s.gotcha.enabled = v === 'true'; },
-  SMRITI_GOTCHA_MIN_IMPORTANCE: (s, v) => { s.gotcha.minImportance = parseInt(v, 10); },
-  SMRITI_CLAUDEMD_ENABLED: (s, v) => { s.claudemd.enabled = v === 'true'; },
-  SMRITI_CLAUDEMD_MAX_ENTRIES: (s, v) => { s.claudemd.maxEntries = parseInt(v, 10); },
-  SMRITI_LOG_LEVEL: (s, v) => { s.log.level = v; },
+  SMRITI_WORKER_PORT: (s, v) => {
+    s.worker.port = parseInt(v, 10);
+  },
+  SMRITI_WORKER_HOST: (s, v) => {
+    s.worker.host = v;
+  },
+  SMRITI_IDLE_TIMEOUT: (s, v) => {
+    s.worker.idleTimeoutMinutes = parseInt(v, 10);
+  },
+  SMRITI_BATCH_SIZE: (s, v) => {
+    s.extraction.batchSize = parseInt(v, 10);
+  },
+  SMRITI_MAX_WAIT_SECONDS: (s, v) => {
+    s.extraction.maxWaitSeconds = parseInt(v, 10);
+  },
+  SMRITI_EXTRACTION_MODEL: (s, v) => {
+    s.extraction.model = v;
+  },
+  SMRITI_MAX_RETRIES: (s, v) => {
+    s.extraction.maxRetries = parseInt(v, 10);
+  },
+  SMRITI_TOKEN_BUDGET: (s, v) => {
+    s.context.tokenBudget = parseInt(v, 10);
+  },
+  SMRITI_INLINE_SUMMARY: (s, v) => {
+    s.context.showInlineSummary = v === 'true';
+  },
+  SMRITI_REDACT_SECRETS: (s, v) => {
+    s.privacy.redactSecrets = v === 'true';
+  },
+  SMRITI_STRIP_PRIVATE: (s, v) => {
+    s.privacy.stripPrivateTags = v === 'true';
+  },
+  SMRITI_VECTOR_WEIGHT: (s, v) => {
+    s.scoring.vectorWeight = parseFloat(v);
+  },
+  SMRITI_RECENCY_WEIGHT: (s, v) => {
+    s.scoring.recencyWeight = parseFloat(v);
+  },
+  SMRITI_IMPORTANCE_WEIGHT: (s, v) => {
+    s.scoring.importanceWeight = parseFloat(v);
+  },
+  SMRITI_DEDUPE_THRESHOLD: (s, v) => {
+    s.scoring.dedupeThreshold = parseFloat(v);
+  },
+  SMRITI_REFLECTION_ENABLED: (s, v) => {
+    s.reflection.enabled = v === 'true';
+  },
+  SMRITI_DEEP_REFLECTION_INTERVAL: (s, v) => {
+    s.reflection.deepReflectionInterval = parseInt(v, 10);
+  },
+  SMRITI_AUTO_LINKING_ENABLED: (s, v) => {
+    s.reflection.autoLinkingEnabled = v === 'true';
+  },
+  SMRITI_AUTO_LINK_THRESHOLD: (s, v) => {
+    s.reflection.autoLinkThreshold = parseFloat(v);
+  },
+  SMRITI_PROVIDER_PRIMARY: (s, v) => {
+    s.provider.primary = v;
+  },
+  OPENROUTER_API_KEY: (s, v) => {
+    s.provider.openrouterApiKey = v;
+  },
+  SMRITI_OPENROUTER_MODEL: (s, v) => {
+    s.provider.openrouterModel = v;
+  },
+  SMRITI_FALLBACK_ENABLED: (s, v) => {
+    s.provider.fallbackEnabled = v === 'true';
+  },
+  SMRITI_FAILURE_THRESHOLD: (s, v) => {
+    s.provider.failureThreshold = parseInt(v, 10);
+  },
+  SMRITI_COOLDOWN_MINUTES: (s, v) => {
+    s.provider.cooldownMinutes = parseInt(v, 10);
+  },
+  SMRITI_CLAUDE_BASE_URL: (s, v) => {
+    s.provider.claudeBaseUrl = v;
+  },
+  SMRITI_CLAUDE_API_KEY: (s, v) => {
+    s.provider.claudeApiKey = v;
+  },
+  SMRITI_MASKING_ENABLED: (s, v) => {
+    s.masking.enabled = v === 'true';
+  },
+  SMRITI_MASKING_BRIEF_THRESHOLD: (s, v) => {
+    s.masking.briefThreshold = parseInt(v, 10);
+  },
+  SMRITI_MASKING_MINIMAL_THRESHOLD: (s, v) => {
+    s.masking.minimalThreshold = parseInt(v, 10);
+  },
+  SMRITI_DEDUP_ENABLED: (s, v) => {
+    s.dedup.enabled = v === 'true';
+  },
+  SMRITI_DEDUP_THRESHOLD: (s, v) => {
+    s.dedup.similarityThreshold = parseFloat(v);
+  },
+  SMRITI_PROACTIVE_ENABLED: (s, v) => {
+    s.proactive.enabled = v === 'true';
+  },
+  SMRITI_PROACTIVE_MIN_SIMILARITY: (s, v) => {
+    s.proactive.minSimilarity = parseFloat(v);
+  },
+  SMRITI_PROACTIVE_MAX_OBSERVATIONS: (s, v) => {
+    s.proactive.maxObservations = parseInt(v, 10);
+  },
+  SMRITI_PROACTIVE_TOKEN_BUDGET: (s, v) => {
+    s.proactive.tokenBudget = parseInt(v, 10);
+  },
+  SMRITI_RETENTION_DAYS: (s, v) => {
+    s.archival.retentionDays = parseInt(v, 10);
+  },
+  SMRITI_VACUUM_ON_MAINTENANCE: (s, v) => {
+    s.archival.vacuumOnMaintenance = v === 'true';
+  },
+  SMRITI_GOTCHA_ENABLED: (s, v) => {
+    s.gotcha.enabled = v === 'true';
+  },
+  SMRITI_GOTCHA_MIN_IMPORTANCE: (s, v) => {
+    s.gotcha.minImportance = parseInt(v, 10);
+  },
+  SMRITI_EMBEDDING_MODEL: (s, v) => {
+    s.embeddings.model = v;
+  },
+  SMRITI_EMBEDDING_DIMENSIONS: (s, v) => {
+    s.embeddings.dimensions = parseInt(v, 10);
+  },
+  SMRITI_CLAUDEMD_ENABLED: (s, v) => {
+    s.claudemd.enabled = v === 'true';
+  },
+  SMRITI_CLAUDEMD_MAX_ENTRIES: (s, v) => {
+    s.claudemd.maxEntries = parseInt(v, 10);
+  },
+  SMRITI_LOG_LEVEL: (s, v) => {
+    s.log.level = v;
+  },
 };
 
 export class Config {
@@ -238,10 +338,7 @@ export class Config {
         typeof target[key] === 'object' &&
         !Array.isArray(target[key])
       ) {
-        this.merge(
-          target[key] as Record<string, unknown>,
-          source[key] as Record<string, unknown>,
-        );
+        this.merge(target[key] as Record<string, unknown>, source[key] as Record<string, unknown>);
       } else {
         target[key] = source[key];
       }
@@ -299,5 +396,9 @@ export function getConfig(): Config {
 }
 
 export function resetConfig(): void {
+  // Delete the settings file so fresh instance loads defaults only
+  try {
+    unlinkSync(SETTINGS_PATH);
+  } catch { /* ok if file doesn't exist */ }
   _instance = null;
 }

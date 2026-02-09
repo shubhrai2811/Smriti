@@ -1,8 +1,18 @@
 import { useApi } from '../hooks.js';
-import { colors, baseStyles, formatNumber, formatCost } from '../theme.js';
+import { baseStyles, colors, formatCost, formatNumber } from '../theme.js';
 import type { TokenUsageSummary } from '../types.js';
 
-function SummaryCard({ label, value, subtext, color }: { label: string; value: string; subtext?: string; color: string }) {
+function SummaryCard({
+  label,
+  value,
+  subtext,
+  color,
+}: {
+  label: string;
+  value: string;
+  subtext?: string;
+  color: string;
+}) {
   return (
     <div
       style={{
@@ -12,20 +22,30 @@ function SummaryCard({ label, value, subtext, color }: { label: string; value: s
         marginBottom: '0',
       }}
     >
-      <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+      <div
+        style={{
+          fontSize: '12px',
+          color: colors.textSecondary,
+          marginBottom: '6px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+        }}
+      >
         {label}
       </div>
-      <div style={{ fontSize: '28px', fontWeight: 700, color, fontFamily: 'monospace' }}>
-        {value}
-      </div>
-      {subtext && (
-        <div style={{ fontSize: '12px', color: colors.textMuted, marginTop: '4px' }}>{subtext}</div>
-      )}
+      <div style={{ fontSize: '28px', fontWeight: 700, color, fontFamily: 'monospace' }}>{value}</div>
+      {subtext && <div style={{ fontSize: '12px', color: colors.textMuted, marginTop: '4px' }}>{subtext}</div>}
     </div>
   );
 }
 
-function BreakdownTable({ title, data }: { title: string; data: Record<string, { inputTokens: number; outputTokens: number; costUsd: number }> }) {
+function BreakdownTable({
+  title,
+  data,
+}: {
+  title: string;
+  data: Record<string, { inputTokens: number; outputTokens: number; costUsd: number }>;
+}) {
   const entries = Object.entries(data);
   if (entries.length === 0) {
     return null;
@@ -33,9 +53,7 @@ function BreakdownTable({ title, data }: { title: string; data: Record<string, {
 
   return (
     <div style={{ ...baseStyles.card, marginBottom: '16px' }}>
-      <h3 style={{ fontSize: '15px', fontWeight: 600, color: colors.textPrimary, margin: '0 0 12px 0' }}>
-        {title}
-      </h3>
+      <h3 style={{ fontSize: '15px', fontWeight: 600, color: colors.textPrimary, margin: '0 0 12px 0' }}>{title}</h3>
       <table style={baseStyles.table}>
         <thead>
           <tr>
@@ -88,7 +106,7 @@ export function Metrics() {
   );
 
   // If the endpoint doesn't exist yet, show an informational state
-  const noEndpoint = error && error.includes('404');
+  const noEndpoint = error?.includes('404');
 
   return (
     <div style={baseStyles.page}>
@@ -102,9 +120,8 @@ export function Metrics() {
             Metrics endpoint not available
           </div>
           <div style={{ color: colors.textSecondary }}>
-            Token usage tracking is stored in the database but the /data/metrics API endpoint
-            has not been added to the data routes yet. Add a metrics route to expose
-            the TokenUsageSummary from token-usage.ts.
+            Token usage tracking is stored in the database but the /data/metrics API endpoint has not been added to the
+            data routes yet. Add a metrics route to expose the TokenUsageSummary from token-usage.ts.
           </div>
         </div>
       )}

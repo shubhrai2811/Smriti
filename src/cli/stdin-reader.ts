@@ -6,7 +6,7 @@ export async function readJsonFromStdin(): Promise<unknown> {
     return {};
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     let buffer = '';
     let resolved = false;
     let parseTimer: ReturnType<typeof setTimeout> | null = null;

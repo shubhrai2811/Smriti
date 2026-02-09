@@ -1,6 +1,5 @@
-import type { AIProvider, TokenUsageInfo } from './provider.js';
 import { getConfig } from '../../shared/config.js';
-import { logger } from '../../utils/logger.js';
+import type { AIProvider, TokenUsageInfo } from './provider.js';
 
 export class OpenRouterProvider implements AIProvider {
   name = 'openrouter';
@@ -16,7 +15,7 @@ export class OpenRouterProvider implements AIProvider {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://github.com/smriti-memory/smriti',
         'X-Title': 'Smriti Memory Plugin',
@@ -34,7 +33,7 @@ export class OpenRouterProvider implements AIProvider {
       throw new Error(`OpenRouter API error ${response.status}: ${error}`);
     }
 
-    const data = await response.json() as any;
+    const data = (await response.json()) as any;
 
     // Track token usage
     if (data.usage) {

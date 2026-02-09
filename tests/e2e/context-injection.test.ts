@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestContext } from '../fixtures/helpers';
-import { createSession } from '../../src/services/sqlite/sessions';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { insertObservation } from '../../src/services/sqlite/observations';
+import { createSession } from '../../src/services/sqlite/sessions';
 import { insertSummary } from '../../src/services/sqlite/summaries';
+import { createTestContext } from '../fixtures/helpers';
 
 describe('Context Injection E2E', () => {
   let ctx: ReturnType<typeof createTestContext>;

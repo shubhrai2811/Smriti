@@ -1,32 +1,38 @@
 import type { Database } from 'bun:sqlite';
-import type { AIProvider } from '../providers/provider.js';
-import type { PendingMessageRow } from '../../shared/types.js';
-import { claimBatch, confirmProcessed, markFailed, getPendingCount } from '../sqlite/pending-messages.js';
-import { insertObservation } from '../sqlite/observations.js';
-import { insertSummary } from '../sqlite/summaries.js';
-import { getObservationsBySession } from '../sqlite/observations.js';
-import { getLastPrompt } from '../sqlite/prompts.js';
-import { getSessionByContentId } from '../sqlite/sessions.js';
-import { buildExtractionPrompt, buildSummaryPrompt } from './prompts.js';
-import { parseExtractionResponse, parseSummaryResponse } from './response-parser.js';
 import { getConfig } from '../../shared/config.js';
 import { logger } from '../../utils/logger.js';
-import { insertEmbedding } from '../sqlite/vectors.js';
 import { buildEmbeddableText, embed, isEmbeddingReady } from '../embeddings/embedding-service.js';
-import { quickReflect } from '../reflection/quick-reflection.js';
-import { shouldRunDeepReflection, deepReflect } from '../reflection/deep-reflection.js';
+import type { AIProvider } from '../providers/provider.js';
 import { autoLink } from '../reflection/auto-linker.js';
-import { extractEntities } from './entity-extractor.js';
+import { deepReflect, shouldRunDeepReflection } from '../reflection/deep-reflection.js';
+import { quickReflect } from '../reflection/quick-reflection.js';
+import type { WorkerState } from '../server.js';
+import { broadcastSSE } from '../server.js';
+import { getObservationsBySession, insertObservation } from '../sqlite/observations.js';
+import { claimBatch, confirmProcessed, getPendingCount } from '../sqlite/pending-messages.js';
+import { getLastPrompt } from '../sqlite/prompts.js';
+import { getSessionByContentId } from '../sqlite/sessions.js';
+import { insertSummary } from '../sqlite/summaries.js';
+import { insertEmbedding } from '../sqlite/vectors.js';
 import { deduplicateObservation } from './dedup.js';
+import { extractEntities } from './entity-extractor.js';
+import { buildExtractionPrompt, buildSummaryPrompt } from './prompts.js';
+import { parseExtractionResponse, parseSummaryResponse } from './response-parser.js';
 
 export class ObservationBatcher {
   private timers: Map<number, ReturnType<typeof setTimeout>> = new Map();
   private processing: Set<number> = new Set();
+  private workerState: WorkerState | null = null;
 
   constructor(
     private db: Database,
     private provider: AIProvider,
   ) {}
+
+  /** Set worker state for SSE broadcasts */
+  setWorkerState(state: WorkerState): void {
+    this.workerState = state;
+  }
 
   /**
    * Called when a new observation is queued for a session.
@@ -45,12 +51,15 @@ export class ObservationBatcher {
       await this.processBatch(sessionId, batchSize);
     } else if (!this.timers.has(sessionId)) {
       // Start max-wait timer
-      this.timers.set(sessionId, setTimeout(() => {
-        this.timers.delete(sessionId);
-        this.processBatch(sessionId, batchSize).catch(err => {
-          logger.error('BATCHER', 'Timer-triggered batch failed', { sessionId, error: (err as Error).message });
-        });
-      }, maxWaitMs));
+      this.timers.set(
+        sessionId,
+        setTimeout(() => {
+          this.timers.delete(sessionId);
+          this.processBatch(sessionId, batchSize).catch((err) => {
+            logger.error('BATCHER', 'Timer-triggered batch failed', { sessionId, error: (err as Error).message });
+          });
+        }, maxWaitMs),
+      );
     }
   }
 
@@ -88,7 +97,7 @@ export class ObservationBatcher {
     const prompt = buildSummaryPrompt(firstPrompt, observations, lastAssistantMessage);
 
     try {
-      const response = await this.provider.extract(prompt);
+      const response = await this.provider.extract(prompt, { sessionId, operation: 'summary' });
       const summary = parseSummaryResponse(response);
 
       if (summary) {
@@ -107,14 +116,14 @@ export class ObservationBatcher {
         // Trigger reflections (non-blocking, best-effort)
         const config = getConfig();
         if (config.get('reflection', 'enabled')) {
-          quickReflect(this.db, this.provider, sessionId, project).catch(err => {
+          quickReflect(this.db, this.provider, sessionId, project).catch((err) => {
             logger.debug('BATCHER', 'Quick reflection failed (non-critical)', { error: (err as Error).message });
           });
 
           // Check if deep reflection should trigger
           const interval = config.get('reflection', 'deepReflectionInterval');
           if (shouldRunDeepReflection(this.db, project, interval)) {
-            deepReflect(this.db, this.provider, project).catch(err => {
+            deepReflect(this.db, this.provider, project).catch((err) => {
               logger.debug('BATCHER', 'Deep reflection failed (non-critical)', { error: (err as Error).message });
             });
           }
@@ -137,7 +146,7 @@ export class ObservationBatcher {
       if (messages.length === 0) return;
 
       // Only process observation-type messages in batch extraction
-      const obsMessages = messages.filter(m => m.message_type === 'observation');
+      const obsMessages = messages.filter((m) => m.message_type === 'observation');
 
       if (obsMessages.length === 0) {
         // Confirm non-observation messages
@@ -148,7 +157,7 @@ export class ObservationBatcher {
       }
 
       const prompt = buildExtractionPrompt(obsMessages);
-      const response = await this.provider.extract(prompt);
+      const response = await this.provider.extract(prompt, { sessionId, operation: 'extraction' });
       const observations = parseExtractionResponse(response);
 
       // Get session info for project/branch
@@ -173,6 +182,7 @@ export class ObservationBatcher {
             concepts: JSON.stringify(obs.concepts),
             filesAffected: JSON.stringify(obs.filesAffected),
             importance: obs.importance,
+            scope: obs.scope,
           });
           insertedIds.push(id);
         }
@@ -181,7 +191,27 @@ export class ObservationBatcher {
         }
       })();
 
-      logger.info('BATCHER', `Batch processed: ${obsMessages.length} inputs -> ${observations.length} observations`, { sessionId });
+      logger.info('BATCHER', `Batch processed: ${obsMessages.length} inputs -> ${observations.length} observations`, {
+        sessionId,
+      });
+
+      // Broadcast new observations via SSE
+      if (this.workerState) {
+        for (let i = 0; i < insertedIds.length; i++) {
+          broadcastSSE(
+            this.workerState,
+            'observation:new',
+            {
+              id: insertedIds[i],
+              title: observations[i].title,
+              type: observations[i].type,
+              importance: observations[i].importance,
+              project,
+            },
+            project,
+          );
+        }
+      }
 
       // Entity extraction (synchronous, best-effort)
       for (let i = 0; i < insertedIds.length; i++) {
@@ -200,7 +230,7 @@ export class ObservationBatcher {
       }
 
       // Compute embeddings asynchronously (non-blocking, best-effort)
-      this.embedObservations(insertedIds, observations, project).catch(err => {
+      this.embedObservations(insertedIds, observations, project).catch((err) => {
         logger.debug('BATCHER', 'Embedding generation failed (non-critical)', { error: (err as Error).message });
       });
     } catch (error) {

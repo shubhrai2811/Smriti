@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestContext, type TestContext } from '../fixtures/helpers';
-import { createSession } from '../../src/services/sqlite/sessions';
-import { insertObservation } from '../../src/services/sqlite/observations';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { findGotchas, formatGotchaWarning } from '../../src/services/context/gotcha';
+import { insertObservation } from '../../src/services/sqlite/observations';
+import { createSession } from '../../src/services/sqlite/sessions';
 import type { ObservationType } from '../../src/shared/types';
+import { createTestContext, type TestContext } from '../fixtures/helpers';
 
 describe('Gotcha / Pitfall Detection', () => {
   let ctx: TestContext;
@@ -180,7 +180,7 @@ describe('Gotcha / Pitfall Detection', () => {
         }),
       });
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.warning).toBeTruthy();
       expect(body.count).toBe(1);
     });
@@ -196,7 +196,7 @@ describe('Gotcha / Pitfall Detection', () => {
         }),
       });
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.warning).toBeNull();
     });
 

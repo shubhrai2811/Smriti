@@ -1,4 +1,4 @@
-import { getWorkerPort, checkHealth } from '../../infrastructure/process-manager.js';
+import { checkHealth, getWorkerPort } from '../../infrastructure/process-manager.js';
 
 export async function statsCommand(): Promise<void> {
   const port = getWorkerPort();
@@ -13,13 +13,16 @@ export async function statsCommand(): Promise<void> {
       console.error(`Stats failed: ${res.status}`);
       process.exit(1);
     }
-    const data = await res.json() as Record<string, unknown>;
+    const data = (await res.json()) as Record<string, unknown>;
 
     console.log('\n  Smriti Stats');
-    console.log('  ' + '-'.repeat(40));
+    console.log(`  ${'-'.repeat(40)}`);
 
     for (const [key, value] of Object.entries(data)) {
-      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
+      const label = key
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, (s) => s.toUpperCase())
+        .trim();
       const display = typeof value === 'object' ? JSON.stringify(value) : String(value);
       console.log(`  ${label.padEnd(25)} ${display}`);
     }

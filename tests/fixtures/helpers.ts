@@ -4,12 +4,12 @@
  */
 
 import { Database } from 'bun:sqlite';
-import { mkdirSync, rmSync, existsSync } from 'fs';
+import { existsSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createApp, type WorkerState } from '../../src/services/server.js';
-import { runMigrations } from '../../src/services/sqlite/migrations/runner.js';
 import { loadVecForTest } from '../../src/services/sqlite/database.js';
+import { runMigrations } from '../../src/services/sqlite/migrations/runner.js';
 
 // On macOS, use Homebrew SQLite for extension loading support
 let _customSqliteSet = false;
@@ -17,16 +17,15 @@ function ensureCustomSQLite(): void {
   if (_customSqliteSet) return;
   _customSqliteSet = true;
   if (process.platform !== 'darwin') return;
-  const paths = [
-    '/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib',
-    '/usr/local/opt/sqlite/lib/libsqlite3.dylib',
-  ];
+  const paths = ['/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib', '/usr/local/opt/sqlite/lib/libsqlite3.dylib'];
   for (const libPath of paths) {
     if (existsSync(libPath)) {
       try {
         Database.setCustomSQLite(libPath);
         return;
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 }
@@ -81,6 +80,7 @@ export function createTestContext(): TestContext {
     isReady: true,
     startTime: Date.now(),
     lastActivityAt: Date.now(),
+    sseClients: new Set(),
   };
 
   const app = createApp(state);

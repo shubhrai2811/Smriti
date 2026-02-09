@@ -1,17 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestContext } from '../fixtures/helpers';
-import { insertObservation } from '../../src/services/sqlite/observations';
-import { insertEmbedding, findSimilarByVector, getEmbedding, countEmbeddings } from '../../src/services/sqlite/vectors';
-import { searchByKeyword, normalizeRank } from '../../src/services/sqlite/fts';
-import { hybridSearch, recencyDecay, normalizeImportance } from '../../src/services/context/search';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { buildContext } from '../../src/services/context/builder';
+import { hybridSearch, normalizeImportance, recencyDecay } from '../../src/services/context/search';
 import { buildEmbeddableText } from '../../src/services/embeddings/embedding-service';
+import { normalizeRank, searchByKeyword } from '../../src/services/sqlite/fts';
+import { insertObservation } from '../../src/services/sqlite/observations';
+import { countEmbeddings, findSimilarByVector, getEmbedding, insertEmbedding } from '../../src/services/sqlite/vectors';
+import { createTestContext } from '../fixtures/helpers';
 
 // Helper: create a test session and return its ID
 function createTestSession(db: any, project: string = '/tmp/test-project'): number {
-  db.query(
-    'INSERT INTO sessions (content_session_id, project, branch, created_at_epoch) VALUES (?, ?, ?, ?)'
-  ).run(`test-${Date.now()}-${Math.random()}`, project, 'main', Date.now());
+  db.query('INSERT INTO sessions (content_session_id, project, branch, created_at_epoch) VALUES (?, ?, ?, ?)').run(
+    `test-${Date.now()}-${Math.random()}`,
+    project,
+    'main',
+    Date.now(),
+  );
   return (db.query('SELECT last_insert_rowid() as id').get() as any).id;
 }
 
@@ -32,7 +35,7 @@ function seededEmbedding(seed: number): Float32Array {
 function perturbedEmbedding(base: Float32Array, noise: number = 0.05): Float32Array {
   const arr = new Float32Array(384);
   for (let i = 0; i < 384; i++) {
-    arr[i] = base[i] + (Math.sin(i * 7.3) * noise);
+    arr[i] = base[i] + Math.sin(i * 7.3) * noise;
   }
   let norm = 0;
   for (let i = 0; i < 384; i++) norm += arr[i] * arr[i];
@@ -74,11 +77,15 @@ describe('Smart Context E2E', () => {
       const session2 = createTestSession(ctx.db, '/project-b');
 
       insertObservation(ctx.db, {
-        sessionId: session1, project: '/project-a', type: 'discovery',
+        sessionId: session1,
+        project: '/project-a',
+        type: 'discovery',
         title: 'Database connection pooling',
       });
       insertObservation(ctx.db, {
-        sessionId: session2, project: '/project-b', type: 'discovery',
+        sessionId: session2,
+        project: '/project-b',
+        type: 'discovery',
         title: 'Database migration strategy',
       });
 
@@ -89,7 +96,9 @@ describe('Smart Context E2E', () => {
     it('FTS5 returns no results for unmatched query', () => {
       const sessionId = createTestSession(ctx.db);
       insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery',
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
         title: 'React component lifecycle',
       });
 
@@ -109,7 +118,10 @@ describe('Smart Context E2E', () => {
     it('stores and retrieves embeddings', () => {
       const sessionId = createTestSession(ctx.db);
       const obsId = insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery', title: 'Test obs',
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Test obs',
       });
 
       const embedding = seededEmbedding(42);
@@ -117,7 +129,8 @@ describe('Smart Context E2E', () => {
 
       const retrieved = getEmbedding(ctx.db, obsId);
       expect(retrieved).not.toBeNull();
-      expect(retrieved!.length).toBe(384);
+      expect(retrieved?.length).toBe(384);
+      // biome-ignore lint/style/noNonNullAssertion: test assertion - guaranteed by expect above
       expect(Math.abs(retrieved![0] - embedding[0])).toBeLessThan(0.001);
     });
 
@@ -128,12 +141,18 @@ describe('Smart Context E2E', () => {
       const differentEmb = seededEmbedding(999);
 
       const obsId1 = insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery', title: 'Similar observation',
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Similar observation',
       });
       insertEmbedding(ctx.db, obsId1, similarEmb);
 
       const obsId2 = insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery', title: 'Different observation',
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Different observation',
       });
       insertEmbedding(ctx.db, obsId2, differentEmb);
 
@@ -150,12 +169,18 @@ describe('Smart Context E2E', () => {
       const emb = seededEmbedding(1);
 
       const obsId1 = insertObservation(ctx.db, {
-        sessionId: session1, project: '/project-a', type: 'discovery', title: 'Obs A',
+        sessionId: session1,
+        project: '/project-a',
+        type: 'discovery',
+        title: 'Obs A',
       });
       insertEmbedding(ctx.db, obsId1, emb);
 
       const obsId2 = insertObservation(ctx.db, {
-        sessionId: session2, project: '/project-b', type: 'discovery', title: 'Obs B',
+        sessionId: session2,
+        project: '/project-b',
+        type: 'discovery',
+        title: 'Obs B',
       });
       insertEmbedding(ctx.db, obsId2, emb);
 
@@ -169,7 +194,10 @@ describe('Smart Context E2E', () => {
       expect(countEmbeddings(ctx.db, '/tmp/test')).toBe(0);
 
       const obsId = insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery', title: 'Test',
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Test',
       });
       insertEmbedding(ctx.db, obsId, seededEmbedding(1));
       expect(countEmbeddings(ctx.db, '/tmp/test')).toBe(1);
@@ -183,17 +211,24 @@ describe('Smart Context E2E', () => {
 
       // Old but similar
       const obsId1 = insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery',
-        title: 'Old similar observation', importance: 5,
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Old similar observation',
+        importance: 5,
       });
-      ctx.db.query('UPDATE observations SET created_at_epoch = ? WHERE id = ?')
+      ctx.db
+        .query('UPDATE observations SET created_at_epoch = ? WHERE id = ?')
         .run(Date.now() - 14 * 24 * 60 * 60 * 1000, obsId1);
       insertEmbedding(ctx.db, obsId1, perturbedEmbedding(queryEmb, 0.02));
 
       // Recent but different
       const obsId2 = insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery',
-        title: 'Recent different observation', importance: 5,
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Recent different observation',
+        importance: 5,
       });
       insertEmbedding(ctx.db, obsId2, seededEmbedding(999));
 
@@ -213,16 +248,25 @@ describe('Smart Context E2E', () => {
       const sessionId = createTestSession(ctx.db);
 
       insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery',
-        title: 'React component lifecycle management', importance: 5,
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'React component lifecycle management',
+        importance: 5,
       });
       insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery',
-        title: 'PostgreSQL query optimization techniques', importance: 6,
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'PostgreSQL query optimization techniques',
+        importance: 6,
       });
       insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery',
-        title: 'Docker container networking setup', importance: 7,
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Docker container networking setup',
+        importance: 7,
       });
 
       const results = hybridSearch(ctx.db, {
@@ -237,19 +281,27 @@ describe('Smart Context E2E', () => {
       const sessionId = createTestSession(ctx.db);
 
       const lowId = insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery',
-        title: 'Low importance item', importance: 1,
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Low importance item',
+        importance: 1,
       });
       const highId = insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery',
-        title: 'High importance item', importance: 10,
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'High importance item',
+        importance: 10,
       });
 
       const results = hybridSearch(ctx.db, { project: '/tmp/test' });
       expect(results.length).toBe(2);
 
-      const highResult = results.find(r => r.observation.id === highId)!;
-      const lowResult = results.find(r => r.observation.id === lowId)!;
+      // biome-ignore lint/style/noNonNullAssertion: test assertion - find is guaranteed by expect above
+      const highResult = results.find((r) => r.observation.id === highId)!;
+      // biome-ignore lint/style/noNonNullAssertion: test assertion - find is guaranteed by expect above
+      const lowResult = results.find((r) => r.observation.id === lowId)!;
       expect(highResult.signals.importanceNorm).toBeGreaterThan(lowResult.signals.importanceNorm);
     });
 
@@ -257,7 +309,9 @@ describe('Smart Context E2E', () => {
       const sessionId = createTestSession(ctx.db);
 
       insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'bugfix',
+        sessionId,
+        project: '/tmp/test',
+        type: 'bugfix',
         title: 'Fixed authentication token validation bug',
         facts: JSON.stringify(['JWT validation was broken']),
         concepts: JSON.stringify(['authentication', 'JWT']),
@@ -265,7 +319,9 @@ describe('Smart Context E2E', () => {
       });
 
       insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'feature',
+        sessionId,
+        project: '/tmp/test',
+        type: 'feature',
         title: 'Added JWT token refresh endpoint',
         concepts: JSON.stringify(['authentication', 'tokens']),
         importance: 5,
@@ -335,7 +391,9 @@ describe('Smart Context E2E', () => {
     it('context endpoint accepts prompt parameter', async () => {
       const sessionId = createTestSession(ctx.db, '/tmp/test-project');
       insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test-project', type: 'discovery',
+        sessionId,
+        project: '/tmp/test-project',
+        type: 'discovery',
         title: 'Authentication token handling',
         facts: JSON.stringify(['JWT tokens validated on each request']),
         concepts: JSON.stringify(['authentication', 'JWT']),
@@ -351,8 +409,11 @@ describe('Smart Context E2E', () => {
     it('buildContext falls back to recency when hybrid finds nothing', () => {
       const sessionId = createTestSession(ctx.db, '/tmp/test');
       insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery',
-        title: 'Test observation', importance: 5,
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Test observation',
+        importance: 5,
       });
 
       const context = buildContext(ctx.db, {
@@ -368,7 +429,10 @@ describe('Smart Context E2E', () => {
     it('inline summary shows search type', () => {
       const sessionId = createTestSession(ctx.db, '/tmp/test');
       insertObservation(ctx.db, {
-        sessionId, project: '/tmp/test', type: 'discovery', title: 'Test observation',
+        sessionId,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Test observation',
       });
 
       // Without prompt -> recency mode
@@ -394,7 +458,7 @@ describe('Smart Context E2E', () => {
     it('settings endpoint returns scoring config', async () => {
       const res = await fetch(`${ctx.baseUrl}/settings`);
       expect(res.status).toBe(200);
-      const settings = await res.json() as any;
+      const settings = (await res.json()) as any;
       expect(settings.scoring).toBeTruthy();
       expect(settings.scoring.vectorWeight).toBe(0.5);
       expect(settings.scoring.recencyWeight).toBe(0.3);

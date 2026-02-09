@@ -10,7 +10,7 @@ export function insertSummary(
     learned?: string;
     completed?: string;
     nextSteps?: string;
-  }
+  },
 ): number {
   const now = Date.now();
 
@@ -18,7 +18,7 @@ export function insertSummary(
     `INSERT INTO summaries
        (session_id, project, request, learned, completed, next_steps, created_at_epoch)
      VALUES (?, ?, ?, ?, ?, ?, ?)
-     RETURNING id`
+     RETURNING id`,
   );
 
   const row = stmt.get(
@@ -28,26 +28,18 @@ export function insertSummary(
     opts.learned ?? null,
     opts.completed ?? null,
     opts.nextSteps ?? null,
-    now
+    now,
   ) as { id: number };
 
   return row.id;
 }
 
-export function getLastSummary(
-  db: Database,
-  project: string
-): SummaryRow | null {
-  const stmt = db.query(
-    'SELECT * FROM summaries WHERE project = ? ORDER BY created_at_epoch DESC LIMIT 1'
-  );
+export function getLastSummary(db: Database, project: string): SummaryRow | null {
+  const stmt = db.query('SELECT * FROM summaries WHERE project = ? ORDER BY created_at_epoch DESC LIMIT 1');
   return (stmt.get(project) as SummaryRow) ?? null;
 }
 
-export function getSummaryBySession(
-  db: Database,
-  sessionId: number
-): SummaryRow | null {
+export function getSummaryBySession(db: Database, sessionId: number): SummaryRow | null {
   const stmt = db.query('SELECT * FROM summaries WHERE session_id = ?');
   return (stmt.get(sessionId) as SummaryRow) ?? null;
 }

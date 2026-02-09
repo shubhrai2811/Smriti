@@ -4,7 +4,7 @@ import { cursorAdapter } from './cursor.js';
 
 const adapters: Record<string, PlatformAdapter> = {
   'claude-code': claudeCodeAdapter,
-  'cursor': cursorAdapter,
+  cursor: cursorAdapter,
 };
 
 /**

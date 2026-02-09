@@ -35,7 +35,7 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
 
   // Generic API keys (common formats: sk-*, api_*, key-*, etc.)
   { name: 'API Key', pattern: /\b(sk-[a-zA-Z0-9]{20,})\b/g },
-  { name: 'API Key', pattern: /\b(api[_-]?key[_-]?[=:]\s*["']?[a-zA-Z0-9_\-]{20,})["']?/gi },
+  { name: 'API Key', pattern: /\b(api[_-]?key[_-]?[=:]\s*["']?[a-zA-Z0-9_-]{20,})["']?/gi },
 
   // NPM access tokens
   { name: 'NPM Token', pattern: /\bnpm_[a-zA-Z0-9]{36}\b/g },
@@ -60,7 +60,11 @@ const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   { name: 'Basic Auth', pattern: /\bbasic\s+[a-zA-Z0-9+/]{20,}={0,2}\b/gi },
 
   // Private keys (PEM format)
-  { name: 'Private Key', pattern: /-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|ENCRYPTED\s+)?PRIVATE\s+KEY-----[\s\S]*?-----END\s+(?:RSA\s+|EC\s+|DSA\s+|ENCRYPTED\s+)?PRIVATE\s+KEY-----/g },
+  {
+    name: 'Private Key',
+    pattern:
+      /-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|ENCRYPTED\s+)?PRIVATE\s+KEY-----[\s\S]*?-----END\s+(?:RSA\s+|EC\s+|DSA\s+|ENCRYPTED\s+)?PRIVATE\s+KEY-----/g,
+  },
 
   // Passwords in connection strings or assignments
   { name: 'Password', pattern: /(?:password|passwd|pwd)\s*[=:]\s*["']?[^\s"']{8,}["']?/gi },

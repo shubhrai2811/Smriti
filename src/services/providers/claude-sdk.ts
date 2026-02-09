@@ -1,7 +1,6 @@
-import type { AIProvider, TokenUsageInfo } from './provider.js';
-import { logger } from '../../utils/logger.js';
-import { OBSERVER_SESSIONS_DIR } from '../../shared/paths.js';
 import { mkdirSync } from 'fs';
+import { OBSERVER_SESSIONS_DIR } from '../../shared/paths.js';
+import type { AIProvider, TokenUsageInfo } from './provider.js';
 
 export class ClaudeSDKProvider implements AIProvider {
   readonly name = 'claude-sdk';
@@ -9,7 +8,7 @@ export class ClaudeSDKProvider implements AIProvider {
 
   async extract(prompt: string): Promise<string> {
     // Dynamic import to avoid loading SDK unless needed
-    // @ts-ignore - external module resolved at runtime
+    // @ts-expect-error - external module resolved at runtime
     const { query } = await import('@anthropic-ai/claude-code');
 
     mkdirSync(OBSERVER_SESSIONS_DIR, { recursive: true });
@@ -42,7 +41,8 @@ export class ClaudeSDKProvider implements AIProvider {
         prompt: messages,
         options: {
           maxTurns: 1,
-          systemPrompt: 'You are a structured data extraction assistant. Output only the requested XML format. No explanations.',
+          systemPrompt:
+            'You are a structured data extraction assistant. Output only the requested XML format. No explanations.',
           cwd: OBSERVER_SESSIONS_DIR,
         },
       });
@@ -93,7 +93,7 @@ export class ClaudeSDKProvider implements AIProvider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      // @ts-ignore - external module resolved at runtime
+      // @ts-expect-error - external module resolved at runtime
       await import('@anthropic-ai/claude-code');
       return true;
     } catch {

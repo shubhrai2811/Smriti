@@ -5,69 +5,63 @@ import type { Database } from 'bun:sqlite';
  */
 export function addTag(db: Database, observationId: number, tag: string): void {
   const now = Date.now();
-  db.run(
-    'INSERT OR IGNORE INTO observation_tags (observation_id, tag, created_at_epoch) VALUES (?, ?, ?)',
-    [observationId, tag, now]
-  );
+  db.run('INSERT OR IGNORE INTO observation_tags (observation_id, tag, created_at_epoch) VALUES (?, ?, ?)', [
+    observationId,
+    tag,
+    now,
+  ]);
 }
 
 /**
  * Remove a tag from an observation.
  */
 export function removeTag(db: Database, observationId: number, tag: string): void {
-  db.run(
-    'DELETE FROM observation_tags WHERE observation_id = ? AND tag = ?',
-    [observationId, tag]
-  );
+  db.run('DELETE FROM observation_tags WHERE observation_id = ? AND tag = ?', [observationId, tag]);
 }
 
 /**
  * Get all tags for a specific observation.
  */
 export function getTagsByObservation(db: Database, observationId: number): string[] {
-  const rows = db.query(
-    'SELECT tag FROM observation_tags WHERE observation_id = ? ORDER BY created_at_epoch ASC'
-  ).all(observationId) as { tag: string }[];
+  const rows = db
+    .query('SELECT tag FROM observation_tags WHERE observation_id = ? ORDER BY created_at_epoch ASC')
+    .all(observationId) as { tag: string }[];
 
-  return rows.map(r => r.tag);
+  return rows.map((r) => r.tag);
 }
 
 /**
  * Get observation IDs that have a given tag, filtered by project.
  */
-export function getObservationsByTag(
-  db: Database,
-  project: string,
-  tag: string,
-  limit?: number
-): number[] {
+export function getObservationsByTag(db: Database, project: string, tag: string, limit?: number): number[] {
   const effectiveLimit = limit ?? 50;
 
-  const rows = db.query(
-    `SELECT ot.observation_id FROM observation_tags ot
+  const rows = db
+    .query(
+      `SELECT ot.observation_id FROM observation_tags ot
      INNER JOIN observations o ON o.id = ot.observation_id
-     WHERE o.project = ? AND ot.tag = ?
+     WHERE (o.project = ? OR o.scope = 'global') AND ot.tag = ?
      ORDER BY o.created_at_epoch DESC
-     LIMIT ?`
-  ).all(project, tag, effectiveLimit) as { observation_id: number }[];
+     LIMIT ?`,
+    )
+    .all(project, tag, effectiveLimit) as { observation_id: number }[];
 
-  return rows.map(r => r.observation_id);
+  return rows.map((r) => r.observation_id);
 }
 
 /**
  * Get all unique tags with counts for a project.
  */
-export function getAllTags(
-  db: Database,
-  project: string
-): { tag: string; count: number }[] {
-  return db.query(
-    `SELECT ot.tag, COUNT(*) as count FROM observation_tags ot
+export function getAllTags(db: Database, project: string): { tag: string; count: number }[] {
+  return db
+    .query(
+      `SELECT ot.tag, COUNT(*) as count FROM observation_tags ot
      INNER JOIN observations o ON o.id = ot.observation_id
-     WHERE o.project = ?
+     WHERE (o.project = ? OR o.scope = 'global')
      GROUP BY ot.tag
-     ORDER BY count DESC`
-  ).all(project) as { tag: string; count: number }[];
+     ORDER BY count DESC`,
+    )
+    .all(project) as { tag: string; count: number }[];
 }
 
 /**
@@ -79,7 +73,7 @@ export function updateRetrievalTracking(db: Database, observationIds: number[]):
 
   const now = Date.now();
   const stmt = db.prepare(
-    'UPDATE observations SET last_retrieved_epoch = ?, retrieval_count = COALESCE(retrieval_count, 0) + 1 WHERE id = ?'
+    'UPDATE observations SET last_retrieved_epoch = ?, retrieval_count = COALESCE(retrieval_count, 0) + 1 WHERE id = ?',
   );
 
   const batchUpdate = db.transaction(() => {

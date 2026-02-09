@@ -1,6 +1,6 @@
 import { closeDatabase } from '../services/sqlite/database.js';
-import { removePidFile } from './process-manager.js';
 import { logger } from '../utils/logger.js';
+import { removePidFile } from './process-manager.js';
 
 let isShuttingDown = false;
 
@@ -12,11 +12,19 @@ export async function gracefulShutdown(server?: { stop: () => void }): Promise<v
 
   // Stop accepting new connections
   if (server) {
-    try { server.stop(); } catch { /* ok */ }
+    try {
+      server.stop();
+    } catch {
+      /* ok */
+    }
   }
 
   // Close database connection
-  try { closeDatabase(); } catch { /* ok */ }
+  try {
+    closeDatabase();
+  } catch {
+    /* ok */
+  }
 
   // Remove PID file so new workers can start
   removePidFile();

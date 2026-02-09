@@ -6,8 +6,8 @@
  */
 
 import { readFileSync } from 'fs';
-import { join } from 'path';
 import { homedir } from 'os';
+import { join } from 'path';
 
 const PID_FILE = join(homedir(), '.smriti', 'worker.pid');
 
@@ -102,10 +102,10 @@ export function registerSmritiPlugin(app: any) {
         `/context/inject?project=${encodeURIComponent(project)}&prompt=${encodeURIComponent(prompt)}&sourceIde=opencode`,
       );
 
-      if (res && res.ok) {
+      if (res?.ok) {
         const context = await res.text();
         if (context) {
-          return { systemPrompt: (event.systemPrompt || '') + '\n\n' + context };
+          return { systemPrompt: `${event.systemPrompt || ''}\n\n${context}` };
         }
       }
       return undefined;
@@ -114,29 +114,33 @@ export function registerSmritiPlugin(app: any) {
 
   // 5. Custom tool: smriti_search
   if (typeof app.tool === 'function') {
-    app.tool('smriti_search', {
-      description: 'Search Smriti memory for relevant observations',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Search query text' },
-          project: { type: 'string', description: 'Project name' },
-          limit: { type: 'number', description: 'Max results (default 10)' },
+    app.tool(
+      'smriti_search',
+      {
+        description: 'Search Smriti memory for relevant observations',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search query text' },
+            project: { type: 'string', description: 'Project name' },
+            limit: { type: 'number', description: 'Max results (default 10)' },
+          },
+          required: ['query'],
         },
-        required: ['query'],
       },
-    }, async (args: any) => {
-      const project = args.project || process.cwd();
-      const limit = args.limit || 10;
+      async (args: any) => {
+        const project = args.project || process.cwd();
+        const _limit = args.limit || 10;
 
-      const res = await workerFetch(
-        `/context/inject?project=${encodeURIComponent(project)}&prompt=${encodeURIComponent(args.query)}&sourceIde=opencode`,
-      );
+        const res = await workerFetch(
+          `/context/inject?project=${encodeURIComponent(project)}&prompt=${encodeURIComponent(args.query)}&sourceIde=opencode`,
+        );
 
-      if (res && res.ok) {
-        return await res.text();
-      }
-      return 'Smriti worker not available';
-    });
+        if (res?.ok) {
+          return await res.text();
+        }
+        return 'Smriti worker not available';
+      },
+    );
   }
 }

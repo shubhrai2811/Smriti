@@ -1,3 +1,5 @@
+export type MemoryScope = 'project' | 'global';
+
 // Observation types
 export type ObservationType =
   | 'bugfix'
@@ -39,6 +41,7 @@ export interface ObservationRow {
   concepts: string | null; // JSON array
   files_affected: string | null; // JSON array
   importance: number;
+  scope: MemoryScope;
   prompt_number: number | null;
   created_at: string;
   created_at_epoch: number;
@@ -88,6 +91,7 @@ export interface ExtractedObservation {
   concepts: string[];
   filesAffected: string[];
   importance: number;
+  scope: MemoryScope;
 }
 
 // Summary from AI

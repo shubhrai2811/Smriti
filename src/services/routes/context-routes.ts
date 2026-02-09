@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import type { WorkerState } from '../server.js';
-import { buildContext } from '../context/builder.js';
 import { getConfig } from '../../shared/config.js';
 import { logger } from '../../utils/logger.js';
+import { buildContext } from '../context/builder.js';
+import type { WorkerState } from '../server.js';
 
 export function contextRoutes(state: WorkerState): Hono {
   const app = new Hono();

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { detectCorrection } from '../../src/services/extraction/corrections';
 
 describe('Correction Pattern Detection', () => {

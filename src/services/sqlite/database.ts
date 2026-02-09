@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { mkdirSync, existsSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 import { DB_PATH, SMRITI_DIR } from '../../shared/paths.js';
 import { logger } from '../../utils/logger.js';
 import { runMigrations } from './migrations/runner.js';
@@ -22,7 +22,7 @@ function ensureCustomSQLite(): void {
   // Homebrew SQLite paths by architecture
   const paths = [
     '/opt/homebrew/opt/sqlite/lib/libsqlite3.dylib', // Apple Silicon
-    '/usr/local/opt/sqlite/lib/libsqlite3.dylib',    // Intel Mac
+    '/usr/local/opt/sqlite/lib/libsqlite3.dylib', // Intel Mac
   ];
 
   for (const libPath of paths) {
@@ -50,6 +50,10 @@ export function getDatabase(dbPath?: string): Database {
   ensureCustomSQLite();
 
   _db = new Database(path, { create: true });
+
+  // Must set busy_timeout FIRST — before any other PRAGMAs — so that
+  // concurrent processes wait instead of getting SQLITE_BUSY_RECOVERY.
+  _db.run('PRAGMA busy_timeout=5000');
 
   // SQLite optimizations
   _db.run('PRAGMA journal_mode=WAL');

@@ -11,21 +11,21 @@ export function findGotchas(
   if (filesBeingTouched.length === 0) return [];
 
   const allObs = getRecentObservations(db, project, { limit: 200 });
-  return allObs.filter(obs => {
+  return allObs.filter((obs) => {
     if (obs.importance < minImportance) return false;
     if (!['bugfix', 'decision', 'pattern'].includes(obs.type)) return false;
     const files: string[] = obs.files_affected ? JSON.parse(obs.files_affected) : [];
-    return files.some((f: string) => filesBeingTouched.some(t =>
-      f.endsWith(t) || t.endsWith(f) || f.includes(t) || t.includes(f)
-    ));
+    return files.some((f: string) =>
+      filesBeingTouched.some((t) => f.endsWith(t) || t.endsWith(f) || f.includes(t) || t.includes(f)),
+    );
   });
 }
 
 export function formatGotchaWarning(gotchas: ObservationRow[]): string {
   if (gotchas.length === 0) return '';
-  const lines = gotchas.map(g => {
+  const lines = gotchas.map((g) => {
     const facts: string[] = g.facts ? JSON.parse(g.facts) : [];
-    return `- **[${g.type}]** ${g.title}${facts[0] ? ': ' + facts[0] : ''}`;
+    return `- **[${g.type}]** ${g.title}${facts[0] ? `: ${facts[0]}` : ''}`;
   });
   return `### Gotchas for files you're touching\n\n${lines.join('\n')}\n`;
 }

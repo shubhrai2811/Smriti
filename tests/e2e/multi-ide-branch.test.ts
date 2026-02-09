@@ -1,16 +1,28 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestContext } from '../fixtures/helpers';
-import { insertObservation } from '../../src/services/sqlite/observations';
-import { detectPlatform, getAdapter } from '../../src/cli/adapters/index';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { claudeCodeAdapter } from '../../src/cli/adapters/claude-code';
 import { cursorAdapter } from '../../src/cli/adapters/cursor';
-import { getCurrentBranch, getProjectName, isWorktree, getWorktreeMainRoot, getMainBranch, normalizeProjectPath } from '../../src/utils/git';
+import { detectPlatform, getAdapter } from '../../src/cli/adapters/index';
 import { buildContext } from '../../src/services/context/builder';
+import { insertObservation } from '../../src/services/sqlite/observations';
+import {
+  getCurrentBranch,
+  getMainBranch,
+  getProjectName,
+  getWorktreeMainRoot,
+  isWorktree,
+  normalizeProjectPath,
+} from '../../src/utils/git';
+import { createTestContext } from '../fixtures/helpers';
 
 // Helper: create a test session
-function createTestSession(db: any, project: string = '/tmp/test-project', status: string = 'active', sourceIde: string = 'claude-code'): number {
+function createTestSession(
+  db: any,
+  project: string = '/tmp/test-project',
+  status: string = 'active',
+  sourceIde: string = 'claude-code',
+): number {
   db.query(
-    'INSERT INTO sessions (content_session_id, project, branch, source_ide, status, created_at_epoch) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT INTO sessions (content_session_id, project, branch, source_ide, status, created_at_epoch) VALUES (?, ?, ?, ?, ?, ?)',
   ).run(`test-${Date.now()}-${Math.random()}`, project, 'main', sourceIde, status, Date.now());
   return (db.query('SELECT last_insert_rowid() as id').get() as any).id;
 }
@@ -161,9 +173,13 @@ describe('Multi-IDE & Branch E2E', () => {
       expect(branch).toBeNull();
     });
 
-    it('getProjectName returns basename', () => {
+    it('getProjectName returns basename with disambiguation for generic names', () => {
       expect(getProjectName('/tmp/my-project')).toBe('my-project');
-      expect(getProjectName('/Users/dev/code/app')).toBe('app');
+      // Generic names like "app" get parent prefix to avoid collisions
+      expect(getProjectName('/Users/dev/code/app')).toBe('code/app');
+      expect(getProjectName('/Users/dev/client-a/api')).toBe('client-a/api');
+      // Non-generic names stay as-is
+      expect(getProjectName('/Users/dev/my-cool-project')).toBe('my-cool-project');
     });
 
     it('isWorktree returns false for non-git directory', () => {
@@ -191,14 +207,20 @@ describe('Multi-IDE & Branch E2E', () => {
       const session = createTestSession(ctx.db, '/tmp/test');
 
       const id1 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test',
-        type: 'discovery', title: 'From Claude Code',
-        sourceIde: 'claude-code', importance: 5,
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'From Claude Code',
+        sourceIde: 'claude-code',
+        importance: 5,
       });
       const id2 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test',
-        type: 'discovery', title: 'From Cursor',
-        sourceIde: 'cursor', importance: 5,
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'From Cursor',
+        sourceIde: 'cursor',
+        importance: 5,
       });
 
       const obs1 = ctx.db.query('SELECT source_ide FROM observations WHERE id = ?').get(id1) as any;
@@ -212,8 +234,10 @@ describe('Multi-IDE & Branch E2E', () => {
       const session = createTestSession(ctx.db, '/tmp/test');
 
       const id = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test',
-        type: 'discovery', title: 'Default IDE',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Default IDE',
         importance: 5,
       });
 
@@ -227,14 +251,20 @@ describe('Multi-IDE & Branch E2E', () => {
       const session = createTestSession(ctx.db, '/tmp/test', 'completed');
 
       insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test',
-        type: 'discovery', title: 'Claude Code finding',
-        sourceIde: 'claude-code', importance: 7,
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Claude Code finding',
+        sourceIde: 'claude-code',
+        importance: 7,
       });
       insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test',
-        type: 'discovery', title: 'Cursor finding',
-        sourceIde: 'cursor', importance: 7,
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Cursor finding',
+        sourceIde: 'cursor',
+        importance: 7,
       });
 
       const context = buildContext(ctx.db, {
@@ -251,14 +281,20 @@ describe('Multi-IDE & Branch E2E', () => {
       const session = createTestSession(ctx.db, '/tmp/test', 'completed');
 
       insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test',
-        type: 'discovery', title: 'From CC',
-        sourceIde: 'claude-code', importance: 5,
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'From CC',
+        sourceIde: 'claude-code',
+        importance: 5,
       });
       insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test',
-        type: 'discovery', title: 'From Cursor',
-        sourceIde: 'cursor', importance: 5,
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'From Cursor',
+        sourceIde: 'cursor',
+        importance: 5,
       });
 
       const context = buildContext(ctx.db, {
@@ -276,9 +312,12 @@ describe('Multi-IDE & Branch E2E', () => {
       const session = createTestSession(ctx.db, '/tmp/test', 'completed');
 
       insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test',
-        type: 'discovery', title: 'Only CC',
-        sourceIde: 'claude-code', importance: 5,
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Only CC',
+        sourceIde: 'claude-code',
+        importance: 5,
       });
 
       const context = buildContext(ctx.db, {
@@ -307,9 +346,9 @@ describe('Multi-IDE & Branch E2E', () => {
 
       expect(res.ok).toBe(true);
 
-      const session = ctx.db.query(
-        "SELECT source_ide FROM sessions WHERE content_session_id = 'test-cursor-session'"
-      ).get() as any;
+      const session = ctx.db
+        .query("SELECT source_ide FROM sessions WHERE content_session_id = 'test-cursor-session'")
+        .get() as any;
       expect(session.source_ide).toBe('cursor');
     });
   });

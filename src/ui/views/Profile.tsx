@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApi } from '../hooks.js';
-import { colors, categoryColors, baseStyles, formatTime, confidenceBar, parseJsonArray } from '../theme.js';
-import type { ProfileResponse, ProfileEntryRow } from '../types.js';
+import { baseStyles, categoryColors, colors, confidenceBar, formatTime, parseJsonArray } from '../theme.js';
+import type { ProfileEntryRow, ProfileResponse } from '../types.js';
 
 function ProfileCard({ entry }: { entry: ProfileEntryRow }) {
   const catColor = categoryColors[entry.category] || colors.textSecondary;
@@ -30,7 +30,9 @@ function ProfileCard({ entry }: { entry: ProfileEntryRow }) {
         <div>
           <div style={{ fontSize: '11px', color: colors.textMuted, marginBottom: '3px' }}>Confidence</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12px', color: colors.textPrimary, fontFamily: 'monospace', letterSpacing: '1px' }}>
+            <span
+              style={{ fontSize: '12px', color: colors.textPrimary, fontFamily: 'monospace', letterSpacing: '1px' }}
+            >
               {confidenceBar(entry.confidence)}
             </span>
             <span style={{ fontSize: '11px', color: colors.textSecondary }}>
@@ -52,9 +54,9 @@ function ProfileCard({ entry }: { entry: ProfileEntryRow }) {
           <div>
             <div style={{ fontSize: '11px', color: colors.textMuted, marginBottom: '3px' }}>From Reflections</div>
             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-              {reflectionIds.map((id, i) => (
+              {reflectionIds.map((id) => (
                 <span
-                  key={i}
+                  key={id}
                   style={{
                     fontSize: '11px',
                     color: colors.accentPurple,
@@ -141,6 +143,8 @@ export function Profile() {
             return (
               <div
                 key={cat}
+                role="button"
+                tabIndex={0}
                 style={{
                   ...baseStyles.badge(catColor),
                   cursor: 'pointer',
@@ -148,6 +152,9 @@ export function Profile() {
                   fontSize: '13px',
                 }}
                 onClick={() => setCategory(cat)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setCategory(cat);
+                }}
               >
                 {cat.replace('_', ' ')} ({items.length})
               </div>

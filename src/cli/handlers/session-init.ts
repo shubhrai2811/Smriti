@@ -1,8 +1,8 @@
-import type { EventHandler, NormalizedHookInput, HookResult } from '../types.js';
-import { getWorkerPort, checkHealth } from '../../infrastructure/process-manager.js';
-import { getProjectName, getCurrentBranch } from '../../utils/git.js';
-import { stripPrivateTags } from '../../utils/privacy.js';
+import { checkHealth, getWorkerPort } from '../../infrastructure/process-manager.js';
+import { getCurrentBranch, getProjectName } from '../../utils/git.js';
 import { logger } from '../../utils/logger.js';
+import { stripPrivateTags } from '../../utils/privacy.js';
+import type { EventHandler, HookResult, NormalizedHookInput } from '../types.js';
 
 export const sessionInitHandler: EventHandler = {
   async execute(input: NormalizedHookInput): Promise<HookResult> {
@@ -39,7 +39,7 @@ export const sessionInitHandler: EventHandler = {
         return { continue: true, suppressOutput: true };
       }
 
-      const responseBody = await response.json() as {
+      const responseBody = (await response.json()) as {
         sessionId: number;
         promptNumber: number;
         proactiveContext?: string;

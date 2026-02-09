@@ -8,7 +8,7 @@ export function formatObservation(obs: ObservationRow): string {
   let result = `- **[${obs.type}]** ${obs.title}${importanceIndicator}\n`;
 
   if (facts.length > 0) {
-    result += facts.map(f => `  - ${f}`).join('\n') + '\n';
+    result += `${facts.map((f) => `  - ${f}`).join('\n')}\n`;
   }
 
   if (files.length > 0) {

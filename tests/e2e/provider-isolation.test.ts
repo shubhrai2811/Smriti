@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { getConfig, resetConfig } from '../../src/shared/config';
 
 describe('Provider Base URL Isolation', () => {

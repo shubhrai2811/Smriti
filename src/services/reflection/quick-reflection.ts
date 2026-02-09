@@ -1,11 +1,11 @@
 import type { Database } from 'bun:sqlite';
+import { logger } from '../../utils/logger.js';
 import type { AIProvider } from '../providers/provider.js';
 import { getObservationsBySession } from '../sqlite/observations.js';
-import { getSummaryBySession } from '../sqlite/summaries.js';
 import { insertReflection } from '../sqlite/reflections.js';
+import { getSummaryBySession } from '../sqlite/summaries.js';
 import { buildQuickReflectionPrompt } from './prompts.js';
 import { parseQuickReflectionResponse } from './response-parser.js';
-import { logger } from '../../utils/logger.js';
 
 /**
  * Generate quick reflections at the end of a session.
@@ -32,10 +32,14 @@ export async function quickReflect(
 
     // Build prompt and call AI — convert null fields to undefined for type compat
     const summaryArg = summary
-      ? { request: summary.request ?? undefined, learned: summary.learned ?? undefined, completed: summary.completed ?? undefined }
+      ? {
+          request: summary.request ?? undefined,
+          learned: summary.learned ?? undefined,
+          completed: summary.completed ?? undefined,
+        }
       : null;
     const prompt = buildQuickReflectionPrompt(observations, summaryArg);
-    const response = await provider.extract(prompt);
+    const response = await provider.extract(prompt, { sessionId, operation: 'quick_reflection' });
 
     // Parse insights
     const observationIds = observations.map((o) => o.id);

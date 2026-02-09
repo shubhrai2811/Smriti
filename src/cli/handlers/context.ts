@@ -1,7 +1,7 @@
-import type { EventHandler, NormalizedHookInput, HookResult } from '../types.js';
-import { getWorkerPort, checkHealth } from '../../infrastructure/process-manager.js';
-import { getProjectName, getCurrentBranch } from '../../utils/git.js';
+import { checkHealth, getWorkerPort } from '../../infrastructure/process-manager.js';
+import { getCurrentBranch, getProjectName } from '../../utils/git.js';
 import { logger } from '../../utils/logger.js';
+import type { EventHandler, HookResult, NormalizedHookInput } from '../types.js';
 
 export const contextHandler: EventHandler = {
   async execute(input: NormalizedHookInput): Promise<HookResult> {

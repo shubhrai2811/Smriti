@@ -1,31 +1,41 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestContext, type TestContext } from '../fixtures/helpers';
-import { upsertEntity, addEntityMention, getEntitiesByProject, getHotspotEntities, getEntitiesByObservation, getObservationsByEntity } from '../../src/services/sqlite/entities';
-import { archiveOldObservations, vacuumDatabase, getArchivalStats } from '../../src/services/sqlite/archival';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { extractEntities } from '../../src/services/extraction/entity-extractor';
+import { archiveOldObservations, getArchivalStats, vacuumDatabase } from '../../src/services/sqlite/archival';
+import {
+  addEntityMention,
+  getEntitiesByObservation,
+  getEntitiesByProject,
+  getHotspotEntities,
+  getObservationsByEntity,
+  upsertEntity,
+} from '../../src/services/sqlite/entities';
 import { redactSecrets } from '../../src/utils/privacy';
+import { createTestContext, type TestContext } from '../fixtures/helpers';
 
 // Helper to seed a session + observation for tests that need them
-function seedSessionAndObservation(ctx: TestContext, opts?: {
-  project?: string;
-  createdAtEpoch?: number;
-  type?: string;
-  title?: string;
-}) {
+function seedSessionAndObservation(
+  ctx: TestContext,
+  opts?: {
+    project?: string;
+    createdAtEpoch?: number;
+    type?: string;
+    title?: string;
+  },
+) {
   const project = opts?.project || '/tmp/test-proj';
   const epoch = opts?.createdAtEpoch || Date.now();
 
   ctx.db.run(
     `INSERT INTO sessions (content_session_id, project, branch, source_ide, status, created_at_epoch, prompt_count)
      VALUES (?, ?, 'main', 'claude-code', 'active', ?, 1)`,
-    [`sess-${epoch}-${Math.random().toString(36).slice(2)}`, project, epoch]
+    [`sess-${epoch}-${Math.random().toString(36).slice(2)}`, project, epoch],
   );
   const session = ctx.db.query('SELECT last_insert_rowid() as id').get() as { id: number };
 
   ctx.db.run(
     `INSERT INTO observations (session_id, project, branch, source_ide, type, title, facts, concepts, files_affected, importance, created_at_epoch)
      VALUES (?, ?, 'main', 'claude-code', ?, ?, '["fact1"]', '["concept1"]', '["src/index.ts"]', 7, ?)`,
-    [session.id, project, opts?.type || 'discovery', opts?.title || 'Test observation', epoch]
+    [session.id, project, opts?.type || 'discovery', opts?.title || 'Test observation', epoch],
   );
   const obs = ctx.db.query('SELECT last_insert_rowid() as id').get() as { id: number };
 
@@ -107,9 +117,9 @@ describe('Phase 7: Polish & Advanced', () => {
         context: 'modified in bugfix',
       });
 
-      const mention = ctx.db.query(
-        'SELECT * FROM entity_mentions WHERE entity_id = ? AND observation_id = ?'
-      ).get(entityId, observationId) as any;
+      const mention = ctx.db
+        .query('SELECT * FROM entity_mentions WHERE entity_id = ? AND observation_id = ?')
+        .get(entityId, observationId) as any;
       expect(mention).not.toBeNull();
       expect(mention.context).toBe('modified in bugfix');
     });
@@ -125,9 +135,9 @@ describe('Phase 7: Polish & Advanced', () => {
       addEntityMention(ctx.db, { entityId, observationId, context: 'first' });
       addEntityMention(ctx.db, { entityId, observationId, context: 'second' });
 
-      const count = ctx.db.query(
-        'SELECT COUNT(*) as c FROM entity_mentions WHERE entity_id = ? AND observation_id = ?'
-      ).get(entityId, observationId) as { c: number };
+      const count = ctx.db
+        .query('SELECT COUNT(*) as c FROM entity_mentions WHERE entity_id = ? AND observation_id = ?')
+        .get(entityId, observationId) as { c: number };
       expect(count.c).toBe(1);
     });
 
@@ -152,7 +162,7 @@ describe('Phase 7: Polish & Advanced', () => {
     });
 
     it('getHotspotEntities returns by mention_count DESC', () => {
-      const id1 = upsertEntity(ctx.db, { project: '/tmp/proj', entityType: 'file', name: 'hot.ts' });
+      const _id1 = upsertEntity(ctx.db, { project: '/tmp/proj', entityType: 'file', name: 'hot.ts' });
       upsertEntity(ctx.db, { project: '/tmp/proj', entityType: 'file', name: 'hot.ts' }); // +1
       upsertEntity(ctx.db, { project: '/tmp/proj', entityType: 'file', name: 'hot.ts' }); // +1
       upsertEntity(ctx.db, { project: '/tmp/proj', entityType: 'file', name: 'cold.ts' });
@@ -206,7 +216,7 @@ describe('Phase 7: Polish & Advanced', () => {
       });
 
       const entities = getEntitiesByProject(ctx.db, '/tmp/proj', { entityType: 'file' });
-      const names = entities.map(e => e.name);
+      const names = entities.map((e) => e.name);
       expect(names).toContain('src/auth/login.ts');
       expect(names).toContain('src/auth/middleware.ts');
     });
@@ -224,9 +234,10 @@ describe('Phase 7: Polish & Advanced', () => {
       });
 
       const entities = getEntitiesByProject(ctx.db, '/tmp/proj', { entityType: 'file' });
-      const appEntity = entities.find(e => e.name === 'src/App.tsx');
+      const appEntity = entities.find((e) => e.name === 'src/App.tsx');
       expect(appEntity).toBeDefined();
-      expect(appEntity!.metadata).toBeDefined();
+      expect(appEntity?.metadata).toBeDefined();
+      // biome-ignore lint/style/noNonNullAssertion: test assertion - guaranteed by expect above
       const meta = JSON.parse(appEntity!.metadata!);
       expect(meta.extension).toBe('tsx');
       expect(meta.language).toBe('typescript');
@@ -245,7 +256,7 @@ describe('Phase 7: Polish & Advanced', () => {
       });
 
       const entities = getEntitiesByProject(ctx.db, '/tmp/proj', { entityType: 'error_pattern' });
-      const names = entities.map(e => e.name);
+      const names = entities.map((e) => e.name);
       expect(names).toContain('TypeError');
       expect(names).toContain('ConnectionRefusedError');
     });
@@ -263,12 +274,12 @@ describe('Phase 7: Polish & Advanced', () => {
       });
 
       const entities = getEntitiesByProject(ctx.db, '/tmp/proj', { entityType: 'dependency' });
-      const names = entities.map(e => e.name);
+      const names = entities.map((e) => e.name);
       expect(names).toContain('hono');
       expect(names).toContain('esbuild');
       // Scoped package @anthropic-ai/sdk is extracted as the regex can capture it
       // but may split it — check for at least the base name
-      expect(names.some(n => n.includes('anthropic'))).toBe(true);
+      expect(names.some((n) => n.includes('anthropic'))).toBe(true);
     });
 
     it('extracts config keys from config-type observations', () => {
@@ -284,7 +295,7 @@ describe('Phase 7: Polish & Advanced', () => {
       });
 
       const entities = getEntitiesByProject(ctx.db, '/tmp/proj', { entityType: 'config_key' });
-      const names = entities.map(e => e.name);
+      const names = entities.map((e) => e.name);
       expect(names).toContain('SMRITI_WORKER_PORT');
       expect(names).toContain('worker.port');
     });
@@ -302,7 +313,7 @@ describe('Phase 7: Polish & Advanced', () => {
       });
 
       const entities = getEntitiesByProject(ctx.db, '/tmp/proj', { entityType: 'function' });
-      const names = entities.map(e => e.name);
+      const names = entities.map((e) => e.name);
       expect(names).toContain('processObservation');
       expect(names).toContain('buildContext');
       expect(names).toContain('validateInput');
@@ -321,7 +332,7 @@ describe('Phase 7: Polish & Advanced', () => {
       });
 
       const entities = getEntitiesByProject(ctx.db, '/tmp/proj', { entityType: 'function' });
-      const names = entities.map(e => e.name);
+      const names = entities.map((e) => e.name);
       // These should all be skipped
       expect(names).not.toContain('require');
       expect(names).not.toContain('forEach');
@@ -385,10 +396,14 @@ describe('Phase 7: Polish & Advanced', () => {
       const result = archiveOldObservations(ctx.db, project, 90);
       expect(result.archived).toBe(2);
 
-      const archived = ctx.db.query('SELECT COUNT(*) as c FROM archived_observations WHERE project = ?').get(project) as { c: number };
+      const archived = ctx.db
+        .query('SELECT COUNT(*) as c FROM archived_observations WHERE project = ?')
+        .get(project) as { c: number };
       expect(archived.c).toBe(2);
 
-      const remaining = ctx.db.query('SELECT COUNT(*) as c FROM observations WHERE project = ?').get(project) as { c: number };
+      const remaining = ctx.db.query('SELECT COUNT(*) as c FROM observations WHERE project = ?').get(project) as {
+        c: number;
+      };
       expect(remaining.c).toBe(0);
     });
 
@@ -428,14 +443,14 @@ describe('Phase 7: Polish & Advanced', () => {
     });
 
     it('detects OpenAI API keys', () => {
-      const longKey = 'sk-' + 'a'.repeat(50);
+      const longKey = `sk-${'a'.repeat(50)}`;
       const { redacted, detected } = redactSecrets(`key: ${longKey}`);
       expect(detected).toContain('OpenAI API Key');
       expect(redacted).not.toContain(longKey);
     });
 
     it('detects NPM tokens', () => {
-      const token = 'npm_' + 'a'.repeat(36);
+      const token = `npm_${'a'.repeat(36)}`;
       const { redacted, detected } = redactSecrets(`token: ${token}`);
       expect(detected).toContain('NPM Token');
       expect(redacted).not.toContain(token);
@@ -443,35 +458,35 @@ describe('Phase 7: Polish & Advanced', () => {
 
     it('detects Google API keys', () => {
       // AIza + exactly 35 chars of [0-9A-Za-z_-]
-      const key = 'AIza' + 'a'.repeat(35);
+      const key = `AIza${'a'.repeat(35)}`;
       const { redacted, detected } = redactSecrets(`key: ${key}`);
       expect(detected).toContain('Google API Key');
       expect(redacted).not.toContain(key);
     });
 
     it('detects Stripe secret keys', () => {
-      const key = 'sk_live_' + 'a'.repeat(24);
+      const key = `sk_live_${'a'.repeat(24)}`;
       const { redacted, detected } = redactSecrets(`STRIPE_KEY=${key}`);
       expect(detected).toContain('Stripe Secret Key');
       expect(redacted).not.toContain(key);
     });
 
     it('detects Stripe publishable keys', () => {
-      const key = 'pk_test_' + 'b'.repeat(24);
+      const key = `pk_test_${'b'.repeat(24)}`;
       const { redacted, detected } = redactSecrets(`PK=${key}`);
       expect(detected).toContain('Stripe Publishable Key');
       expect(redacted).not.toContain(key);
     });
 
     it('detects SendGrid API keys', () => {
-      const sgKey = 'SG.' + 'a'.repeat(22) + '.' + 'b'.repeat(43);
+      const sgKey = `SG.${'a'.repeat(22)}.${'b'.repeat(43)}`;
       const { redacted, detected } = redactSecrets(`SENDGRID=${sgKey}`);
       expect(detected).toContain('SendGrid API Key');
       expect(redacted).not.toContain(sgKey);
     });
 
     it('detects Twilio API key SIDs', () => {
-      const key = 'SK' + 'a'.repeat(32);
+      const key = `SK${'a'.repeat(32)}`;
       const { redacted, detected } = redactSecrets(`TWILIO=${key}`);
       expect(detected).toContain('Twilio API Key');
       expect(redacted).not.toContain(key);
@@ -485,7 +500,7 @@ describe('Phase 7: Polish & Advanced', () => {
     });
 
     it('detects hex-encoded secrets', () => {
-      const hexSecret = 'secret=' + 'a1b2c3d4'.repeat(6);
+      const hexSecret = `secret=${'a1b2c3d4'.repeat(6)}`;
       const { detected } = redactSecrets(hexSecret);
       expect(detected).toContain('Hex Secret');
     });
@@ -513,7 +528,7 @@ describe('Phase 7: Polish & Advanced', () => {
 
       const res = await fetch(`${ctx.baseUrl}/data/entities?project=${encodeURIComponent(project)}`);
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.entities.length).toBe(2);
     });
 
@@ -523,7 +538,7 @@ describe('Phase 7: Polish & Advanced', () => {
       upsertEntity(ctx.db, { project, entityType: 'function', name: 'fn1' });
 
       const res = await fetch(`${ctx.baseUrl}/data/entities?project=${encodeURIComponent(project)}&entityType=file`);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.entities.length).toBe(1);
       expect(body.entities[0].entity_type).toBe('file');
     });
@@ -535,13 +550,13 @@ describe('Phase 7: Polish & Advanced', () => {
       }
 
       const res = await fetch(`${ctx.baseUrl}/data/entities?project=${encodeURIComponent(project)}&limit=3`);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.entities.length).toBe(3);
     });
 
     it('GET /data/entities returns empty for unknown project', async () => {
       const res = await fetch(`${ctx.baseUrl}/data/entities?project=${encodeURIComponent('/tmp/nope')}`);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.entities.length).toBe(0);
     });
 
@@ -554,7 +569,7 @@ describe('Phase 7: Polish & Advanced', () => {
 
       const res = await fetch(`${ctx.baseUrl}/data/hotspots?project=${encodeURIComponent(project)}`);
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.hotspots.length).toBe(2);
       expect(body.hotspots[0].name).toBe('hot.ts');
       expect(body.hotspots[0].mention_count).toBe(3);
@@ -566,8 +581,10 @@ describe('Phase 7: Polish & Advanced', () => {
       upsertEntity(ctx.db, { project, entityType: 'function', name: 'fn1' });
       upsertEntity(ctx.db, { project, entityType: 'function', name: 'fn1' }); // mention +1
 
-      const res = await fetch(`${ctx.baseUrl}/data/hotspots?project=${encodeURIComponent(project)}&entityType=function`);
-      const body = await res.json() as any;
+      const res = await fetch(
+        `${ctx.baseUrl}/data/hotspots?project=${encodeURIComponent(project)}&entityType=function`,
+      );
+      const body = (await res.json()) as any;
       expect(body.hotspots.length).toBe(1);
       expect(body.hotspots[0].name).toBe('fn1');
     });
@@ -579,7 +596,7 @@ describe('Phase 7: Polish & Advanced', () => {
     it('POST /admin/maintenance requires project parameter', async () => {
       const res = await fetch(`${ctx.baseUrl}/admin/maintenance`, { method: 'POST' });
       expect(res.status).toBe(400);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.error).toContain('project');
     });
 
@@ -589,12 +606,11 @@ describe('Phase 7: Polish & Advanced', () => {
       seedSessionAndObservation(ctx, { project, createdAtEpoch: oldEpoch, title: 'Ancient obs' });
       seedSessionAndObservation(ctx, { project, title: 'Fresh obs' });
 
-      const res = await fetch(
-        `${ctx.baseUrl}/admin/maintenance?project=${encodeURIComponent(project)}`,
-        { method: 'POST' }
-      );
+      const res = await fetch(`${ctx.baseUrl}/admin/maintenance?project=${encodeURIComponent(project)}`, {
+        method: 'POST',
+      });
       expect(res.status).toBe(200);
-      const body = await res.json() as any;
+      const body = (await res.json()) as any;
       expect(body.status).toBe('maintenance_complete');
       expect(body.archived).toBe(1);
       expect(body.vacuumed).toBe(true);
@@ -606,11 +622,10 @@ describe('Phase 7: Polish & Advanced', () => {
       const project = '/tmp/proj';
       seedSessionAndObservation(ctx, { project });
 
-      const res = await fetch(
-        `${ctx.baseUrl}/admin/maintenance?project=${encodeURIComponent(project)}`,
-        { method: 'POST' }
-      );
-      const body = await res.json() as any;
+      const res = await fetch(`${ctx.baseUrl}/admin/maintenance?project=${encodeURIComponent(project)}`, {
+        method: 'POST',
+      });
+      const body = (await res.json()) as any;
       expect(body.archived).toBe(0);
       expect(body.stats.totalObservations).toBe(1);
     });

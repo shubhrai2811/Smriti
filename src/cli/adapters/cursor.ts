@@ -1,4 +1,4 @@
-import type { PlatformAdapter, NormalizedHookInput, HookResult } from '../types.js';
+import type { HookResult, NormalizedHookInput, PlatformAdapter } from '../types.js';
 
 export const cursorAdapter: PlatformAdapter = {
   normalizeInput(raw: unknown): NormalizedHookInput {
@@ -16,13 +16,9 @@ export const cursorAdapter: PlatformAdapter = {
       toolInput: isShellCommand
         ? { command: r.command }
         : isFileEdit
-        ? { file_path: r.file_path, edits: r.edits }
-        : r.tool_input,
-      toolResponse: isShellCommand
-        ? { output: r.output }
-        : isFileEdit
-        ? { success: true }
-        : r.result_json,
+          ? { file_path: r.file_path, edits: r.edits }
+          : r.tool_input,
+      toolResponse: isShellCommand ? { output: r.output } : isFileEdit ? { success: true } : r.result_json,
       transcriptPath: r.transcript_path as string | undefined,
       filePath: r.file_path as string | undefined,
       edits: r.edits as unknown[] | undefined,
