@@ -37,6 +37,7 @@ export interface ObservationRow {
   concepts: string | null; // JSON array
   files_affected: string | null; // JSON array
   importance: number;
+  scope?: string;
   prompt_number: number | null;
   created_at: string;
   created_at_epoch: number;
@@ -112,6 +113,10 @@ export interface SmritiSettings {
     deepReflectionInterval: number;
     autoLinkingEnabled: boolean;
     autoLinkThreshold: number;
+  };
+  embeddings: {
+    model: string;
+    dimensions: number;
   };
   provider: {
     primary: string;
@@ -194,4 +199,28 @@ export interface TagsResponse {
 
 export interface ObservationTagsResponse {
   tags: string[];
+}
+
+export interface EntityRelationshipRow {
+  id: number;
+  source_entity_id: number;
+  target_entity_id: number;
+  relationship_type: string;
+  confidence: number;
+  evidence_count: number;
+  first_seen_epoch: number;
+  last_seen_epoch: number;
+  source_name?: string;
+  target_name?: string;
+  source_type?: string;
+  target_type?: string;
+}
+
+export interface EntityRelationshipsResponse {
+  relationships: EntityRelationshipRow[];
+}
+
+export interface EntityGraphResponse {
+  nodes: EntityRow[];
+  edges: EntityRelationshipRow[];
 }

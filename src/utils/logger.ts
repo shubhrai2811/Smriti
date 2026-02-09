@@ -37,12 +37,7 @@ function shouldLog(level: LogLevel): boolean {
   return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[configuredLevel];
 }
 
-function formatMessage(
-  level: LogLevel,
-  component: string,
-  message: string,
-  context?: Record<string, unknown>,
-): string {
+function formatMessage(level: LogLevel, component: string, message: string, context?: Record<string, unknown>): string {
   const tag = level.toUpperCase().padEnd(5);
   let line = `[smriti] [${tag}] [${component}] ${message}`;
   if (context !== undefined && Object.keys(context).length > 0) {
@@ -51,15 +46,10 @@ function formatMessage(
   return line;
 }
 
-function log(
-  level: LogLevel,
-  component: string,
-  message: string,
-  context?: Record<string, unknown>,
-): void {
+function log(level: LogLevel, component: string, message: string, context?: Record<string, unknown>): void {
   if (!shouldLog(level)) return;
   const formatted = formatMessage(level, component, message, context);
-  process.stderr.write(formatted + '\n');
+  process.stderr.write(`${formatted}\n`);
 }
 
 export const logger = {

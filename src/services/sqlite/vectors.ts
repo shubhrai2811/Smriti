@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite';
-import { isVecLoaded } from './database.js';
 import { logger } from '../../utils/logger.js';
+import { isVecLoaded } from './database.js';
 
 const EMBEDDING_DIM = 384;
 
@@ -19,20 +19,17 @@ export function insertEmbedding(
 
   const now = Date.now();
   db.query(
-    'INSERT OR REPLACE INTO observation_embeddings (observation_id, embedding, model, created_at_epoch) VALUES (?, ?, ?, ?)'
+    'INSERT OR REPLACE INTO observation_embeddings (observation_id, embedding, model, created_at_epoch) VALUES (?, ?, ?, ?)',
   ).run(observationId, Buffer.from(embedding.buffer), model, now);
 }
 
 /**
  * Get the embedding for an observation.
  */
-export function getEmbedding(
-  db: Database,
-  observationId: number,
-): Float32Array | null {
-  const row = db.query(
-    'SELECT embedding FROM observation_embeddings WHERE observation_id = ?'
-  ).get(observationId) as { embedding: Buffer } | null;
+export function getEmbedding(db: Database, observationId: number): Float32Array | null {
+  const row = db.query('SELECT embedding FROM observation_embeddings WHERE observation_id = ?').get(observationId) as {
+    embedding: Buffer;
+  } | null;
 
   if (!row) return null;
   return new Float32Array(row.embedding.buffer, row.embedding.byteOffset, EMBEDDING_DIM);
@@ -42,9 +39,7 @@ export function getEmbedding(
  * Check if an observation has an embedding.
  */
 export function hasEmbedding(db: Database, observationId: number): boolean {
-  const row = db.query(
-    'SELECT 1 FROM observation_embeddings WHERE observation_id = ?'
-  ).get(observationId);
+  const row = db.query('SELECT 1 FROM observation_embeddings WHERE observation_id = ?').get(observationId);
   return row !== null;
 }
 
@@ -76,7 +71,7 @@ export function findSimilarByVector(
       vec_distance_cosine(oe.embedding, ?) AS distance
     FROM observation_embeddings oe
     JOIN observations o ON o.id = oe.observation_id
-    WHERE o.project = ?
+    WHERE (o.project = ? OR o.scope = 'global')
   `;
   const params: (Buffer | string | number)[] = [queryBuffer, project];
 
@@ -91,7 +86,7 @@ export function findSimilarByVector(
 
   try {
     const rows = db.query(sql).all(...params) as Array<{ observation_id: number; distance: number }>;
-    return rows.map(r => ({
+    return rows.map((r) => ({
       observationId: r.observation_id,
       distance: r.distance,
     }));
@@ -113,12 +108,14 @@ export function distanceToSimilarity(distance: number): number {
  * Count embeddings for a project.
  */
 export function countEmbeddings(db: Database, project: string): number {
-  const row = db.query(`
+  const row = db
+    .query(`
     SELECT COUNT(*) as count
     FROM observation_embeddings oe
     JOIN observations o ON o.id = oe.observation_id
-    WHERE o.project = ?
-  `).get(project) as { count: number };
+    WHERE (o.project = ? OR o.scope = 'global')
+  `)
+    .get(project) as { count: number };
   return row.count;
 }
 
@@ -126,13 +123,15 @@ export function countEmbeddings(db: Database, project: string): number {
  * Get observation IDs that are missing embeddings for a project.
  */
 export function getUnembeddedObservationIds(db: Database, project: string, limit: number = 100): number[] {
-  const rows = db.query(`
+  const rows = db
+    .query(`
     SELECT o.id
     FROM observations o
     LEFT JOIN observation_embeddings oe ON o.id = oe.observation_id
-    WHERE o.project = ? AND oe.observation_id IS NULL
+    WHERE (o.project = ? OR o.scope = 'global') AND oe.observation_id IS NULL
     ORDER BY o.created_at_epoch DESC
     LIMIT ?
-  `).all(project, limit) as Array<{ id: number }>;
-  return rows.map(r => r.id);
+  `)
+    .all(project, limit) as Array<{ id: number }>;
+  return rows.map((r) => r.id);
 }

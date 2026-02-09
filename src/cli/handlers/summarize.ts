@@ -1,7 +1,7 @@
-import type { EventHandler, NormalizedHookInput, HookResult } from '../types.js';
-import { getWorkerPort, checkHealth } from '../../infrastructure/process-manager.js';
+import { checkHealth, getWorkerPort } from '../../infrastructure/process-manager.js';
 import { HOOK_TIMEOUTS } from '../../shared/constants.js';
 import { logger } from '../../utils/logger.js';
+import type { EventHandler, HookResult, NormalizedHookInput } from '../types.js';
 
 export const summarizeHandler: EventHandler = {
   async execute(input: NormalizedHookInput): Promise<HookResult> {
@@ -68,8 +68,12 @@ function extractLastAssistantMessage(transcriptPath: string): string {
               .join('');
           }
         }
-      } catch { /* skip malformed lines */ }
+      } catch {
+        /* skip malformed lines */
+      }
     }
-  } catch { /* file not found or unreadable */ }
+  } catch {
+    /* file not found or unreadable */
+  }
   return '';
 }

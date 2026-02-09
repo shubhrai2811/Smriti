@@ -1,24 +1,16 @@
-import type {
-  ReflectionInsight,
-  DeepReflectionResult,
-} from '../../shared/types.js';
+import type { DeepReflectionResult, ReflectionInsight } from '../../shared/types.js';
 
 /**
  * Parse quick reflection XML response into structured insights.
  */
-export function parseQuickReflectionResponse(
-  response: string,
-  observationIds: number[],
-): ReflectionInsight[] {
+export function parseQuickReflectionResponse(response: string, observationIds: number[]): ReflectionInsight[] {
   const insights: ReflectionInsight[] = [];
 
   try {
     // Match individual insight elements
-    const insightRegex =
-      /<insight\s+category="([^"]*)"(?:\s+confidence="([^"]*)")?\s*>([\s\S]*?)<\/insight>/g;
-    let match;
+    const insightRegex = /<insight\s+category="([^"]*)"(?:\s+confidence="([^"]*)")?\s*>([\s\S]*?)<\/insight>/g;
 
-    while ((match = insightRegex.exec(response)) !== null) {
+    for (let match = insightRegex.exec(response); match !== null; match = insightRegex.exec(response)) {
       const category = match[1] as ReflectionInsight['category'];
       const confidence = match[2] ? parseFloat(match[2]) : 0.5;
       const inner = match[3];
@@ -35,7 +27,7 @@ export function parseQuickReflectionResponse(
         const indices = sourcesMatch[1]
           .split(',')
           .map((s) => parseInt(s.trim(), 10))
-          .filter((n) => !isNaN(n));
+          .filter((n) => !Number.isNaN(n));
         for (const idx of indices) {
           // Convert 1-based index to observation ID
           if (idx >= 1 && idx <= observationIds.length) {
@@ -66,10 +58,7 @@ export function parseQuickReflectionResponse(
 /**
  * Parse deep reflection XML response.
  */
-export function parseDeepReflectionResponse(
-  response: string,
-  observationIds: number[],
-): DeepReflectionResult {
+export function parseDeepReflectionResponse(response: string, observationIds: number[]): DeepReflectionResult {
   const result: DeepReflectionResult = {
     patterns: [],
     profileUpdates: [],
@@ -78,15 +67,15 @@ export function parseDeepReflectionResponse(
 
   try {
     // Parse patterns (same format as quick reflection insights)
-    const patternsBlock = response.match(
-      /<patterns>([\s\S]*?)<\/patterns>/,
-    );
+    const patternsBlock = response.match(/<patterns>([\s\S]*?)<\/patterns>/);
     if (patternsBlock) {
-      const insightRegex =
-        /<insight\s+category="([^"]*)"(?:\s+confidence="([^"]*)")?\s*>([\s\S]*?)<\/insight>/g;
-      let match;
+      const insightRegex = /<insight\s+category="([^"]*)"(?:\s+confidence="([^"]*)")?\s*>([\s\S]*?)<\/insight>/g;
 
-      while ((match = insightRegex.exec(patternsBlock[1])) !== null) {
+      for (
+        let match = insightRegex.exec(patternsBlock[1]);
+        match !== null;
+        match = insightRegex.exec(patternsBlock[1])
+      ) {
         const category = match[1] as ReflectionInsight['category'];
         const confidence = match[2] ? parseFloat(match[2]) : 0.5;
         const inner = match[3];
@@ -101,7 +90,7 @@ export function parseDeepReflectionResponse(
           const indices = sourcesMatch[1]
             .split(',')
             .map((s) => parseInt(s.trim(), 10))
-            .filter((n) => !isNaN(n));
+            .filter((n) => !Number.isNaN(n));
           for (const idx of indices) {
             if (idx >= 1 && idx <= observationIds.length) {
               sourceObservationIds.push(observationIds[idx - 1]);
@@ -109,12 +98,7 @@ export function parseDeepReflectionResponse(
           }
         }
 
-        const validCategories = [
-          'pattern',
-          'lesson',
-          'warning',
-          'improvement',
-        ];
+        const validCategories = ['pattern', 'lesson', 'warning', 'improvement'];
         if (!validCategories.includes(category)) continue;
 
         result.patterns.push({
@@ -127,35 +111,27 @@ export function parseDeepReflectionResponse(
     }
 
     // Parse profile updates
-    const profileBlock = response.match(
-      /<profile_updates>([\s\S]*?)<\/profile_updates>/,
-    );
+    const profileBlock = response.match(/<profile_updates>([\s\S]*?)<\/profile_updates>/);
     if (profileBlock) {
       const entryRegex =
         /<entry\s+category="([^"]*)"(?:\s+confidence="([^"]*)")?(?:\s+action="([^"]*)")?\s*>([\s\S]*?)<\/entry>/g;
-      let match;
 
-      while ((match = entryRegex.exec(profileBlock[1])) !== null) {
-        const category =
-          match[1] as DeepReflectionResult['profileUpdates'][0]['category'];
+      for (let match = entryRegex.exec(profileBlock[1]); match !== null; match = entryRegex.exec(profileBlock[1])) {
+        const category = match[1] as DeepReflectionResult['profileUpdates'][0]['category'];
         const confidence = match[2] ? parseFloat(match[2]) : 0.5;
         const inner = match[4];
 
-        const descMatch = inner.match(
-          /<description>([\s\S]*?)<\/description>/,
-        );
+        const descMatch = inner.match(/<description>([\s\S]*?)<\/description>/);
         const description = descMatch ? descMatch[1].trim() : '';
         if (!description) continue;
 
-        const evidenceMatch = inner.match(
-          /<evidence>([\s\S]*?)<\/evidence>/,
-        );
+        const evidenceMatch = inner.match(/<evidence>([\s\S]*?)<\/evidence>/);
         const evidenceObservationIds: number[] = [];
         if (evidenceMatch) {
           const indices = evidenceMatch[1]
             .split(',')
             .map((s) => parseInt(s.trim(), 10))
-            .filter((n) => !isNaN(n));
+            .filter((n) => !Number.isNaN(n));
           for (const idx of indices) {
             if (idx >= 1 && idx <= observationIds.length) {
               evidenceObservationIds.push(observationIds[idx - 1]);
@@ -163,13 +139,7 @@ export function parseDeepReflectionResponse(
           }
         }
 
-        const validCategories = [
-          'preference',
-          'pattern',
-          'common_mistake',
-          'style',
-          'expertise',
-        ];
+        const validCategories = ['preference', 'pattern', 'common_mistake', 'style', 'expertise'];
         if (!validCategories.includes(category)) continue;
 
         result.profileUpdates.push({
@@ -182,13 +152,14 @@ export function parseDeepReflectionResponse(
     }
 
     // Parse warnings
-    const warningsBlock = response.match(
-      /<warnings>([\s\S]*?)<\/warnings>/,
-    );
+    const warningsBlock = response.match(/<warnings>([\s\S]*?)<\/warnings>/);
     if (warningsBlock) {
       const warningRegex = /<warning>([\s\S]*?)<\/warning>/g;
-      let match;
-      while ((match = warningRegex.exec(warningsBlock[1])) !== null) {
+      for (
+        let match = warningRegex.exec(warningsBlock[1]);
+        match !== null;
+        match = warningRegex.exec(warningsBlock[1])
+      ) {
         const text = match[1].trim();
         if (text) result.warnings.push(text);
       }

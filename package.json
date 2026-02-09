@@ -10,11 +10,15 @@
   "scripts": {
     "build": "bun run scripts/build.ts",
     "dev": "bun run src/services/worker-service.ts --daemon",
+    "lint": "biome check src/ tests/",
+    "lint:fix": "biome check --write src/ tests/",
+    "format": "biome format --write src/ tests/",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@anthropic-ai/claude-code": "latest",
+    "@biomejs/biome": "^2.3.14",
     "@types/bun": "latest",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",

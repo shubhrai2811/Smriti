@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
-import type { WorkerState } from '../server.js';
-import { createSession, getSessionByContentId, completeSession, incrementPromptCount } from '../sqlite/sessions.js';
-import { insertPrompt } from '../sqlite/prompts.js';
-import { enqueuePendingMessage, getPendingCount } from '../sqlite/pending-messages.js';
-import { buildProactiveContext } from '../context/proactive.js';
-import { embed, isEmbeddingReady } from '../embeddings/embedding-service.js';
 import { getConfig } from '../../shared/config.js';
 import { logger } from '../../utils/logger.js';
+import { buildProactiveContext } from '../context/proactive.js';
+import { embed, isEmbeddingReady } from '../embeddings/embedding-service.js';
+import type { WorkerState } from '../server.js';
+import { enqueuePendingMessage, getPendingCount } from '../sqlite/pending-messages.js';
+import { insertPrompt } from '../sqlite/prompts.js';
+import { completeSession, createSession, getSessionByContentId, incrementPromptCount } from '../sqlite/sessions.js';
 
 export function sessionRoutes(state: WorkerState): Hono {
   const app = new Hono();
@@ -102,6 +102,13 @@ export function sessionRoutes(state: WorkerState): Hono {
 
     const pendingCount = getPendingCount(state.db, session.id);
 
+    // Trigger batcher to check if batch is ready
+    if (state.batcher) {
+      state.batcher.onObservationReceived(session.id).catch((err) => {
+        logger.debug('SESSION', 'Batcher trigger failed', { error: (err as Error).message });
+      });
+    }
+
     logger.debug('SESSION', 'Observation queued', {
       sessionId: session.id,
       toolName,
@@ -121,7 +128,19 @@ export function sessionRoutes(state: WorkerState): Hono {
       return c.json({ error: 'Session not found' }, 404);
     }
 
-    // Enqueue summarize message for the extraction pipeline to process
+    // Use batcher to flush pending observations and generate summary
+    if (state.batcher) {
+      try {
+        await state.batcher.summarize(session.id, lastAssistantMessage || '');
+        logger.debug('SESSION', 'Summary generated via batcher', { sessionId: session.id });
+        return c.json({ summarized: true });
+      } catch (err) {
+        logger.error('SESSION', 'Batcher summarize failed', { sessionId: session.id, error: (err as Error).message });
+        // Fall through to enqueue approach
+      }
+    }
+
+    // Fallback: enqueue summarize message for later processing
     enqueuePendingMessage(state.db, {
       sessionId: session.id,
       contentSessionId,
@@ -168,6 +187,7 @@ export function sessionRoutes(state: WorkerState): Hono {
       title: `User correction: ${matchedPattern || 'preference change'}`,
       facts: JSON.stringify([promptText]),
       importance: 8,
+      scope: 'global',
     });
 
     logger.debug('SESSION', 'Correction observation recorded', { sessionId, matchedPattern });

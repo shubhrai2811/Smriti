@@ -1,8 +1,17 @@
-import type { ExtractedObservation, ExtractedSummary, ObservationType } from '../../shared/types.js';
+import type { ExtractedObservation, ExtractedSummary, MemoryScope, ObservationType } from '../../shared/types.js';
 
 const VALID_TYPES = new Set<ObservationType>([
-  'bugfix', 'feature', 'refactor', 'discovery', 'decision', 'pattern', 'config', 'dependency',
+  'bugfix',
+  'feature',
+  'refactor',
+  'discovery',
+  'decision',
+  'pattern',
+  'config',
+  'dependency',
 ]);
+
+const VALID_SCOPES = new Set<MemoryScope>(['project', 'global']);
 
 /**
  * Parse XML observations from AI extraction response.
@@ -10,12 +19,14 @@ const VALID_TYPES = new Set<ObservationType>([
 export function parseExtractionResponse(response: string): ExtractedObservation[] {
   const observations: ExtractedObservation[] = [];
   const obsRegex = /<observation>([\s\S]*?)<\/observation>/g;
-  let match;
 
-  while ((match = obsRegex.exec(response)) !== null) {
+  for (let match = obsRegex.exec(response); match !== null; match = obsRegex.exec(response)) {
     const xml = match[1];
     const rawType = extractTag(xml, 'type') || 'discovery';
-    const type = VALID_TYPES.has(rawType as ObservationType) ? rawType as ObservationType : 'discovery';
+    const type = VALID_TYPES.has(rawType as ObservationType) ? (rawType as ObservationType) : 'discovery';
+
+    const rawScope = extractTag(xml, 'scope') || 'project';
+    const scope = VALID_SCOPES.has(rawScope as MemoryScope) ? (rawScope as MemoryScope) : 'project';
 
     observations.push({
       type,
@@ -24,6 +35,7 @@ export function parseExtractionResponse(response: string): ExtractedObservation[
       concepts: extractCsvTag(xml, 'concepts'),
       filesAffected: extractCsvTag(xml, 'files_affected'),
       importance: clamp(parseInt(extractTag(xml, 'importance') || '5', 10), 1, 10),
+      scope,
     });
   }
 
@@ -56,8 +68,7 @@ function extractArrayTag(xml: string, container: string, item: string): string[]
   if (!containerMatch) return [];
   const items: string[] = [];
   const itemRegex = new RegExp(`<${item}>([\\s\\S]*?)</${item}>`, 'g');
-  let m;
-  while ((m = itemRegex.exec(containerMatch[1])) !== null) {
+  for (let m = itemRegex.exec(containerMatch[1]); m !== null; m = itemRegex.exec(containerMatch[1])) {
     const trimmed = m[1].trim();
     if (trimmed) items.push(trimmed);
   }
@@ -67,10 +78,13 @@ function extractArrayTag(xml: string, container: string, item: string): string[]
 function extractCsvTag(xml: string, tag: string): string[] {
   const value = extractTag(xml, tag);
   if (!value) return [];
-  return value.split(',').map(s => s.trim()).filter(Boolean);
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function clamp(value: number, min: number, max: number): number {
-  if (isNaN(value)) return 5;
+  if (Number.isNaN(value)) return 5;
   return Math.min(max, Math.max(min, value));
 }

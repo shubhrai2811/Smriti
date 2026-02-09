@@ -1,8 +1,8 @@
 import type { Database } from 'bun:sqlite';
-import { isVecLoaded } from '../sqlite/database.js';
-import { getEmbedding, findSimilarByVector, distanceToSimilarity } from '../sqlite/vectors.js';
-import { getObservation } from '../sqlite/observations.js';
 import { logger } from '../../utils/logger.js';
+import { isVecLoaded } from '../sqlite/database.js';
+import { getObservation } from '../sqlite/observations.js';
+import { distanceToSimilarity, findSimilarByVector, getEmbedding } from '../sqlite/vectors.js';
 
 /**
  * Check if a newly embedded observation is a near-duplicate of an existing one.

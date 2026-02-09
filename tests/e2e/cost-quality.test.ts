@@ -1,29 +1,32 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestContext } from '../fixtures/helpers';
-import { insertObservation } from '../../src/services/sqlite/observations';
-import { insertTokenUsage, getTokenUsageBySession, getTokenUsageSummary, getRecentTokenUsage } from '../../src/services/sqlite/token-usage';
-import { getMaskLevel, getSessionAge, maskObservation } from '../../src/services/context/masking';
-import { ProviderManager } from '../../src/services/providers/provider-manager';
-import { OpenRouterProvider } from '../../src/services/providers/openrouter';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { buildContext } from '../../src/services/context/builder';
+import { getMaskLevel, getSessionAge, maskObservation } from '../../src/services/context/masking';
+import { OpenRouterProvider } from '../../src/services/providers/openrouter';
 import type { AIProvider, TokenUsageInfo } from '../../src/services/providers/provider';
+import { ProviderManager } from '../../src/services/providers/provider-manager';
+import { insertObservation } from '../../src/services/sqlite/observations';
+import {
+  getRecentTokenUsage,
+  getTokenUsageBySession,
+  getTokenUsageSummary,
+  insertTokenUsage,
+} from '../../src/services/sqlite/token-usage';
+import { getConfig, resetConfig } from '../../src/shared/config';
 import type { ObservationRow } from '../../src/shared/types';
+import { createTestContext } from '../fixtures/helpers';
 
 // Helper: create a test session
 function createTestSession(db: any, project: string = '/tmp/test-project', status: string = 'active'): number {
   db.query(
-    'INSERT INTO sessions (content_session_id, project, branch, status, created_at_epoch) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO sessions (content_session_id, project, branch, status, created_at_epoch) VALUES (?, ?, ?, ?, ?)',
   ).run(`test-${Date.now()}-${Math.random()}`, project, 'main', status, Date.now());
   return (db.query('SELECT last_insert_rowid() as id').get() as any).id;
 }
 
 // Helper: create a mock provider with configurable behavior
-function createMockProvider(opts: {
-  name?: string;
-  response?: string;
-  shouldFail?: boolean;
-  usage?: TokenUsageInfo;
-} = {}): AIProvider {
+function createMockProvider(
+  opts: { name?: string; response?: string; shouldFail?: boolean; usage?: TokenUsageInfo } = {},
+): AIProvider {
   return {
     name: opts.name ?? 'mock',
     extract: async () => {
@@ -49,6 +52,7 @@ function createMockObsRow(overrides: Partial<ObservationRow> = {}): ObservationR
     concepts: JSON.stringify(['concept-a', 'concept-b']),
     files_affected: JSON.stringify(['src/main.ts', 'src/util.ts']),
     importance: 5,
+    scope: 'project',
     prompt_number: null,
     created_at: '',
     created_at_epoch: Date.now(),
@@ -93,16 +97,28 @@ describe('Cost & Quality E2E', () => {
       const session = createTestSession(ctx.db);
 
       insertTokenUsage(ctx.db, {
-        sessionId: session, provider: 'claude-sdk', operation: 'extraction',
-        inputTokens: 500, outputTokens: 200, estimatedCostUsd: 0.003,
+        sessionId: session,
+        provider: 'claude-sdk',
+        operation: 'extraction',
+        inputTokens: 500,
+        outputTokens: 200,
+        estimatedCostUsd: 0.003,
       });
       insertTokenUsage(ctx.db, {
-        sessionId: session, provider: 'claude-sdk', operation: 'summary',
-        inputTokens: 300, outputTokens: 150, estimatedCostUsd: 0.002,
+        sessionId: session,
+        provider: 'claude-sdk',
+        operation: 'summary',
+        inputTokens: 300,
+        outputTokens: 150,
+        estimatedCostUsd: 0.002,
       });
       insertTokenUsage(ctx.db, {
-        sessionId: session, provider: 'openrouter', operation: 'extraction',
-        inputTokens: 400, outputTokens: 100, estimatedCostUsd: 0.001,
+        sessionId: session,
+        provider: 'openrouter',
+        operation: 'extraction',
+        inputTokens: 400,
+        outputTokens: 100,
+        estimatedCostUsd: 0.001,
       });
 
       const summary = getTokenUsageSummary(ctx.db);
@@ -111,10 +127,10 @@ describe('Cost & Quality E2E', () => {
       expect(summary.totalCostUsd).toBeCloseTo(0.006, 4);
 
       expect(summary.byProvider['claude-sdk'].inputTokens).toBe(800);
-      expect(summary.byProvider['openrouter'].inputTokens).toBe(400);
+      expect(summary.byProvider.openrouter.inputTokens).toBe(400);
 
-      expect(summary.byOperation['extraction'].inputTokens).toBe(900);
-      expect(summary.byOperation['summary'].inputTokens).toBe(300);
+      expect(summary.byOperation.extraction.inputTokens).toBe(900);
+      expect(summary.byOperation.summary.inputTokens).toBe(300);
     });
 
     it('filters summary by session', () => {
@@ -122,12 +138,18 @@ describe('Cost & Quality E2E', () => {
       const session2 = createTestSession(ctx.db);
 
       insertTokenUsage(ctx.db, {
-        sessionId: session1, provider: 'claude-sdk', operation: 'extraction',
-        inputTokens: 500, outputTokens: 200,
+        sessionId: session1,
+        provider: 'claude-sdk',
+        operation: 'extraction',
+        inputTokens: 500,
+        outputTokens: 200,
       });
       insertTokenUsage(ctx.db, {
-        sessionId: session2, provider: 'claude-sdk', operation: 'extraction',
-        inputTokens: 300, outputTokens: 100,
+        sessionId: session2,
+        provider: 'claude-sdk',
+        operation: 'extraction',
+        inputTokens: 300,
+        outputTokens: 100,
       });
 
       const summary = getTokenUsageSummary(ctx.db, { sessionId: session1 });
@@ -138,8 +160,11 @@ describe('Cost & Quality E2E', () => {
       const session = createTestSession(ctx.db);
       for (let i = 0; i < 5; i++) {
         insertTokenUsage(ctx.db, {
-          sessionId: session, provider: 'mock', operation: 'extraction',
-          inputTokens: 100 * (i + 1), outputTokens: 50,
+          sessionId: session,
+          provider: 'mock',
+          operation: 'extraction',
+          inputTokens: 100 * (i + 1),
+          outputTokens: 50,
         });
       }
 
@@ -228,7 +253,9 @@ describe('Cost & Quality E2E', () => {
       }
 
       insertObservation(ctx.db, {
-        sessionId: oldSession, project: '/tmp/test', type: 'discovery',
+        sessionId: oldSession,
+        project: '/tmp/test',
+        type: 'discovery',
         title: 'Old observation with detailed facts',
         facts: JSON.stringify(['This detail should be masked']),
         concepts: JSON.stringify(['should-not-appear']),
@@ -344,15 +371,19 @@ describe('Cost & Quality E2E', () => {
     });
 
     it('isAvailable returns false without API key', async () => {
-      // Ensure no API key is set
+      // Ensure no API key is set (both env var and config singleton)
       const originalKey = process.env.OPENROUTER_API_KEY;
       delete process.env.OPENROUTER_API_KEY;
+      resetConfig();
+      // Clear any API key loaded from settings file
+      getConfig().set('provider', 'openrouterApiKey', '');
 
       const provider = new OpenRouterProvider();
       expect(await provider.isAvailable()).toBe(false);
 
       // Restore
       if (originalKey) process.env.OPENROUTER_API_KEY = originalKey;
+      resetConfig();
     });
 
     it('getLastUsage returns null initially', () => {
@@ -364,7 +395,7 @@ describe('Cost & Quality E2E', () => {
   describe('Settings', () => {
     it('includes masking config', async () => {
       const res = await fetch(`${ctx.baseUrl}/settings`);
-      const settings = await res.json() as any;
+      const settings = (await res.json()) as any;
       expect(settings.masking).toBeTruthy();
       expect(settings.masking.enabled).toBe(true);
       expect(settings.masking.briefThreshold).toBe(3);
@@ -372,12 +403,27 @@ describe('Cost & Quality E2E', () => {
     });
 
     it('includes provider config', async () => {
+      // Reset config to defaults, overriding env vars and settings file
+      const savedPrimary = process.env.SMRITI_PROVIDER_PRIMARY;
+      const savedKey = process.env.OPENROUTER_API_KEY;
+      delete process.env.SMRITI_PROVIDER_PRIMARY;
+      delete process.env.OPENROUTER_API_KEY;
+      resetConfig();
+      const config = getConfig();
+      config.set('provider', 'primary', 'claude-sdk');
+      config.set('provider', 'openrouterApiKey', '');
+
       const res = await fetch(`${ctx.baseUrl}/settings`);
-      const settings = await res.json() as any;
+      const settings = (await res.json()) as any;
       expect(settings.provider).toBeTruthy();
       expect(settings.provider.primary).toBe('claude-sdk');
       expect(settings.provider.fallbackEnabled).toBe(true);
       expect(settings.provider.failureThreshold).toBe(3);
+
+      // Restore
+      if (savedPrimary) process.env.SMRITI_PROVIDER_PRIMARY = savedPrimary;
+      if (savedKey) process.env.OPENROUTER_API_KEY = savedKey;
+      resetConfig();
     });
   });
 });

@@ -39,7 +39,7 @@ export async function configCommand(args: string[]): Promise<void> {
       let value: any = rawValue;
       if (rawValue === 'true') value = true;
       else if (rawValue === 'false') value = false;
-      else if (!isNaN(Number(rawValue)) && rawValue.trim() !== '') value = Number(rawValue);
+      else if (!Number.isNaN(Number(rawValue)) && rawValue.trim() !== '') value = Number(rawValue);
 
       config.set(parts[0] as any, parts[1] as any, value);
       config.save();

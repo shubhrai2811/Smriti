@@ -1,8 +1,8 @@
 import type { Database } from 'bun:sqlite';
-import { findSimilarByVector, getEmbedding, distanceToSimilarity } from '../sqlite/vectors.js';
-import { insertLink } from '../sqlite/observation-links.js';
-import { isVecLoaded } from '../sqlite/database.js';
 import { logger } from '../../utils/logger.js';
+import { isVecLoaded } from '../sqlite/database.js';
+import { insertLink } from '../sqlite/observation-links.js';
+import { distanceToSimilarity, findSimilarByVector, getEmbedding } from '../sqlite/vectors.js';
 
 /**
  * Auto-link a newly embedded observation to similar existing observations.
@@ -54,7 +54,9 @@ export function autoLink(
     }
 
     if (linksCreated > 0) {
-      logger.debug('AUTOLINKER', `Linked observation ${observationId} to ${linksCreated} similar observations`, { project });
+      logger.debug('AUTOLINKER', `Linked observation ${observationId} to ${linksCreated} similar observations`, {
+        project,
+      });
     }
 
     return linksCreated;

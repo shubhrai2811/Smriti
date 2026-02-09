@@ -1,21 +1,74 @@
-import { getConfig } from '../shared/config.js';
-import { logger } from '../utils/logger.js';
-import { SMRITI_DIR } from '../shared/paths.js';
+import type { Database } from 'bun:sqlite';
+import { mkdirSync } from 'fs';
+import { gracefulShutdown, setupSignalHandlers } from '../infrastructure/graceful-shutdown.js';
 import {
-  writePidFile,
-  removePidFile,
   ensureWorkerStarted,
   getWorkerPort,
-  checkHealth,
+  removePidFile,
+  writePidFile,
 } from '../infrastructure/process-manager.js';
-import { setupSignalHandlers, gracefulShutdown } from '../infrastructure/graceful-shutdown.js';
-import { getDatabase } from './sqlite/database.js';
+import { getConfig } from '../shared/config.js';
+import { SMRITI_DIR } from '../shared/paths.js';
+import { logger } from '../utils/logger.js';
+import { ObservationBatcher } from './extraction/batcher.js';
+import { ClaudeSDKProvider } from './providers/claude-sdk.js';
+import { OpenRouterProvider } from './providers/openrouter.js';
+import { ProviderManager } from './providers/provider-manager.js';
 import { createApp, type WorkerState } from './server.js';
+import { getDatabase } from './sqlite/database.js';
 import { resetStaleProcessing } from './sqlite/pending-messages.js';
-import { mkdirSync } from 'fs';
 
 declare const __SMRITI_VERSION__: string;
 const VERSION = typeof __SMRITI_VERSION__ !== 'undefined' ? __SMRITI_VERSION__ : '0.1.0-dev';
+
+/**
+ * Create an ObservationBatcher with the configured AI provider.
+ */
+function createBatcher(db: Database): ObservationBatcher {
+  const config = getConfig();
+  const providerConfig = config.get('provider');
+
+  const claude = new ClaudeSDKProvider();
+  const openrouter = new OpenRouterProvider();
+
+  const primary = providerConfig.primary === 'openrouter' ? openrouter : claude;
+  const fallback = providerConfig.fallbackEnabled
+    ? (providerConfig.primary === 'openrouter' ? claude : openrouter)
+    : undefined;
+
+  const manager = new ProviderManager({
+    primary,
+    fallback,
+    failureThreshold: providerConfig.failureThreshold,
+    cooldownMinutes: providerConfig.cooldownMinutes,
+    db,
+  });
+
+  return new ObservationBatcher(db, manager);
+}
+
+/**
+ * Drain any orphaned pending messages left from crashed hook processes.
+ * Finds all sessions with pending messages and flushes them through the batcher.
+ */
+function drainOrphanedPending(db: Database, batcher: ObservationBatcher): void {
+  const rows = db.query(
+    `SELECT DISTINCT session_id FROM pending_messages WHERE status = 'pending'`,
+  ).all() as Array<{ session_id: number }>;
+
+  if (rows.length === 0) return;
+
+  logger.info('WORKER', `Draining orphaned pending messages for ${rows.length} session(s)`);
+
+  // Flush all pending messages for each session (non-blocking)
+  for (const row of rows) {
+    batcher.flush(row.session_id).catch((err) => {
+      logger.debug('WORKER', `Failed to drain pending for session ${row.session_id}`, {
+        error: (err as Error).message,
+      });
+    });
+  }
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -103,58 +156,23 @@ async function hookCommand(platform: string, event: string) {
     process.exit(1);
   }
 
-  // Ensure worker is running before delegating to hook handler
-  const port = getWorkerPort();
-  let activePort = port;
-
-  if (!port || !(await checkHealth(port, 2000))) {
-    // No running worker detected -- start one in-process
-    activePort = await startInProcess();
-  }
-
-  // Set port in env so hook handlers know where to send requests
-  process.env.SMRITI_WORKER_PORT = String(activePort);
-
-  // Dynamic import to avoid loading hook system in daemon mode
-  const { hookCommand: runHook } = await import('../cli/hook-command.js');
-  const exitCode = await runHook(platform, event);
-  process.exit(exitCode);
-}
-
-/**
- * Start an in-process Hono server (used when hook mode needs a worker
- * but none is currently running). Returns the actual port.
- */
-async function startInProcess(): Promise<number> {
   const config = getConfig();
   const workerConfig = config.get('worker');
   let port = workerConfig.port;
   if (port === 0) port = 37777;
 
-  mkdirSync(SMRITI_DIR, { recursive: true });
+  // Ensure the persistent daemon is running (spawns if needed).
+  // Hooks are pure HTTP clients — they never start their own server.
+  // If the daemon can't be reached, handlers degrade gracefully.
+  await ensureWorkerStarted(port);
 
-  const db = getDatabase();
+  // Set port in env so hook handlers know where to send requests
+  process.env.SMRITI_WORKER_PORT = String(port);
 
-  const state: WorkerState = {
-    db,
-    isReady: false,
-    startTime: Date.now(),
-    lastActivityAt: Date.now(),
-  };
-
-  const app = createApp(state);
-
-  const server = Bun.serve({
-    port,
-    hostname: '127.0.0.1',
-    fetch: app.fetch,
-  });
-
-  // Background init
-  resetStaleProcessing(db);
-  state.isReady = true;
-
-  return server.port!;
+  // Dynamic import to avoid loading hook system in daemon mode
+  const { hookCommand: runHook } = await import('../cli/hook-command.js');
+  const exitCode = await runHook(platform, event);
+  process.exit(exitCode);
 }
 
 /**
@@ -173,6 +191,17 @@ async function mcpCommand() {
  * registers signal handlers, and sets up an idle timeout.
  */
 async function daemonCommand() {
+  // Catch uncaught exceptions/rejections and log them before dying
+  process.on('uncaughtException', (err) => {
+    logger.error('WORKER', `Uncaught exception: ${err.message}`, { stack: err.stack });
+    process.exit(1);
+  });
+  process.on('unhandledRejection', (reason) => {
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    const stack = reason instanceof Error ? reason.stack : undefined;
+    logger.error('WORKER', `Unhandled rejection: ${msg}`, { stack });
+  });
+
   const config = getConfig();
   const workerConfig = config.get('worker');
   let port = workerConfig.port;
@@ -190,6 +219,7 @@ async function daemonCommand() {
     isReady: false,
     startTime: Date.now(),
     lastActivityAt: Date.now(),
+    sseClients: new Set(),
   };
 
   const app = createApp(state);
@@ -201,6 +231,7 @@ async function daemonCommand() {
     fetch: app.fetch,
   });
 
+  // biome-ignore lint/style/noNonNullAssertion: port is always set after server starts
   const actualPort = server.port!;
 
   // Write PID file so other processes can discover us
@@ -221,7 +252,23 @@ async function daemonCommand() {
 
   // Reset any stale "processing" messages from a previous crash
   resetStaleProcessing(db);
+
+  // Create and wire the observation batcher
+  const batcher = createBatcher(db);
+  batcher.setWorkerState(state);
+  state.batcher = batcher;
+
   state.isReady = true;
+
+  // Background: warm up embedding model (non-blocking)
+  import('./embeddings/embedding-service.js').then(({ initEmbeddings }) => {
+    initEmbeddings().catch((err) => {
+      logger.warn('WORKER', 'Embedding warm-up failed (will retry on first use)', { error: (err as Error).message });
+    });
+  });
+
+  // Drain any orphaned pending messages from previous hook processes
+  drainOrphanedPending(db, batcher);
 
   logger.info('WORKER', `Smriti worker v${VERSION} listening on ${host}:${actualPort}`);
 

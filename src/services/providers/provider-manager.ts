@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite';
-import type { AIProvider, TokenUsageInfo } from './provider.js';
-import { insertTokenUsage } from '../sqlite/token-usage.js';
 import { logger } from '../../utils/logger.js';
+import { insertTokenUsage } from '../sqlite/token-usage.js';
+import type { AIProvider, ExtractOpts, TokenUsageInfo } from './provider.js';
 
 export class ProviderManager implements AIProvider {
   name = 'provider-manager';
@@ -29,7 +29,7 @@ export class ProviderManager implements AIProvider {
     this.db = opts.db ?? null;
   }
 
-  async extract(prompt: string, opts?: { sessionId?: number; operation?: string }): Promise<string> {
+  async extract(prompt: string, opts?: ExtractOpts): Promise<string> {
     // Check if we should try primary again after cooldown
     if (this.usingFallback && Date.now() - this.lastPrimaryFailure > this.cooldownMs) {
       logger.info('PROVIDER', 'Cooldown expired, retrying primary provider');
@@ -50,7 +50,7 @@ export class ProviderManager implements AIProvider {
           insertTokenUsage(this.db, {
             sessionId: opts.sessionId,
             provider: activeProvider.name,
-            operation: opts.operation as any,
+            operation: opts.operation as 'extraction' | 'summary' | 'quick_reflection' | 'deep_reflection',
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
             model: usage.model,

@@ -35,6 +35,7 @@ interface ExportObservation {
   concepts: string | null;
   filesAffected: string | null;
   importance: number;
+  scope: string;
   branch: string | null;
   sourceIde: string;
   createdAtEpoch: number;
@@ -55,6 +56,7 @@ interface ExportReflection {
   insight: string;
   category: string | null;
   confidence: number;
+  scope: string;
   createdAtEpoch: number;
 }
 
@@ -89,9 +91,11 @@ export interface ImportResult {
 
 export function exportProject(db: Database, project: string): SmritiExport {
   // Sessions
-  const sessions = db.query(
-    'SELECT content_session_id, project, branch, source_ide, status, created_at_epoch FROM sessions WHERE project = ? ORDER BY created_at_epoch ASC'
-  ).all(project) as Array<{
+  const sessions = db
+    .query(
+      'SELECT content_session_id, project, branch, source_ide, status, created_at_epoch FROM sessions WHERE project = ? ORDER BY created_at_epoch ASC',
+    )
+    .all(project) as Array<{
     content_session_id: string;
     project: string;
     branch: string | null;
@@ -101,19 +105,22 @@ export function exportProject(db: Database, project: string): SmritiExport {
   }>;
 
   // Observations — join with sessions to get content_session_id
-  const observations = db.query(
-    `SELECT o.type, o.title, o.facts, o.concepts, o.files_affected, o.importance, o.branch, o.source_ide, o.created_at_epoch, s.content_session_id
+  const observations = db
+    .query(
+      `SELECT o.type, o.title, o.facts, o.concepts, o.files_affected, o.importance, o.scope, o.branch, o.source_ide, o.created_at_epoch, s.content_session_id
      FROM observations o
      INNER JOIN sessions s ON s.id = o.session_id
      WHERE o.project = ?
-     ORDER BY o.created_at_epoch ASC`
-  ).all(project) as Array<{
+     ORDER BY o.created_at_epoch ASC`,
+    )
+    .all(project) as Array<{
     type: string;
     title: string;
     facts: string | null;
     concepts: string | null;
     files_affected: string | null;
     importance: number;
+    scope: string;
     branch: string | null;
     source_ide: string;
     created_at_epoch: number;
@@ -121,13 +128,15 @@ export function exportProject(db: Database, project: string): SmritiExport {
   }>;
 
   // Summaries — join with sessions to get content_session_id
-  const summaries = db.query(
-    `SELECT sm.request, sm.learned, sm.completed, sm.next_steps, sm.created_at_epoch, s.content_session_id
+  const summaries = db
+    .query(
+      `SELECT sm.request, sm.learned, sm.completed, sm.next_steps, sm.created_at_epoch, s.content_session_id
      FROM summaries sm
      INNER JOIN sessions s ON s.id = sm.session_id
      WHERE sm.project = ?
-     ORDER BY sm.created_at_epoch ASC`
-  ).all(project) as Array<{
+     ORDER BY sm.created_at_epoch ASC`,
+    )
+    .all(project) as Array<{
     request: string | null;
     learned: string | null;
     completed: string | null;
@@ -137,20 +146,25 @@ export function exportProject(db: Database, project: string): SmritiExport {
   }>;
 
   // Reflections
-  const reflections = db.query(
-    'SELECT type, insight, category, confidence, created_at_epoch FROM reflections WHERE project = ? ORDER BY created_at_epoch ASC'
-  ).all(project) as Array<{
+  const reflections = db
+    .query(
+      'SELECT type, insight, category, confidence, scope, created_at_epoch FROM reflections WHERE project = ? ORDER BY created_at_epoch ASC',
+    )
+    .all(project) as Array<{
     type: string;
     insight: string;
     category: string | null;
     confidence: number;
+    scope: string;
     created_at_epoch: number;
   }>;
 
   // Profile entries — include project-specific and global (project IS NULL)
-  const profileEntries = db.query(
-    'SELECT category, description, confidence, evidence_count FROM developer_profile WHERE project = ? OR project IS NULL ORDER BY confidence DESC'
-  ).all(project) as Array<{
+  const profileEntries = db
+    .query(
+      'SELECT category, description, confidence, evidence_count FROM developer_profile WHERE project = ? OR project IS NULL ORDER BY confidence DESC',
+    )
+    .all(project) as Array<{
     category: string;
     description: string;
     confidence: number;
@@ -158,9 +172,11 @@ export function exportProject(db: Database, project: string): SmritiExport {
   }>;
 
   // Entities
-  const entities = db.query(
-    'SELECT entity_type, name, metadata, mention_count FROM entities WHERE project = ? ORDER BY mention_count DESC'
-  ).all(project) as Array<{
+  const entities = db
+    .query(
+      'SELECT entity_type, name, metadata, mention_count FROM entities WHERE project = ? ORDER BY mention_count DESC',
+    )
+    .all(project) as Array<{
     entity_type: string;
     name: string;
     metadata: string | null;
@@ -186,6 +202,7 @@ export function exportProject(db: Database, project: string): SmritiExport {
       concepts: o.concepts,
       filesAffected: o.files_affected,
       importance: o.importance,
+      scope: o.scope ?? 'project',
       branch: o.branch,
       sourceIde: o.source_ide,
       createdAtEpoch: o.created_at_epoch,
@@ -204,6 +221,7 @@ export function exportProject(db: Database, project: string): SmritiExport {
       insight: r.insight,
       category: r.category,
       confidence: r.confidence,
+      scope: r.scope ?? 'project',
       createdAtEpoch: r.created_at_epoch,
     })),
     profileEntries: profileEntries.map((p) => ({
@@ -244,13 +262,13 @@ export function importProject(db: Database, data: SmritiExport): ImportResult {
       db.run(
         `INSERT OR IGNORE INTO sessions (content_session_id, project, branch, source_ide, status, created_at_epoch)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [s.contentSessionId, s.project, s.branch, s.sourceIde, s.status, s.createdAtEpoch]
+        [s.contentSessionId, s.project, s.branch, s.sourceIde, s.status, s.createdAtEpoch],
       );
 
       // Get the id (either newly inserted or existing)
-      const row = db.query(
-        'SELECT id FROM sessions WHERE content_session_id = ?'
-      ).get(s.contentSessionId) as { id: number } | null;
+      const row = db.query('SELECT id FROM sessions WHERE content_session_id = ?').get(s.contentSessionId) as {
+        id: number;
+      } | null;
 
       if (row) {
         sessionIdMap.set(s.contentSessionId, row.id);
@@ -264,9 +282,22 @@ export function importProject(db: Database, data: SmritiExport): ImportResult {
       if (!sessionId) continue; // skip if session not found
 
       db.run(
-        `INSERT INTO observations (session_id, project, branch, source_ide, type, title, facts, concepts, files_affected, importance, created_at_epoch)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [sessionId, project, o.branch, o.sourceIde, o.type, o.title, o.facts, o.concepts, o.filesAffected, o.importance, o.createdAtEpoch]
+        `INSERT INTO observations (session_id, project, branch, source_ide, type, title, facts, concepts, files_affected, importance, scope, created_at_epoch)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          sessionId,
+          project,
+          o.branch,
+          o.sourceIde,
+          o.type,
+          o.title,
+          o.facts,
+          o.concepts,
+          o.filesAffected,
+          o.importance,
+          o.scope ?? 'project',
+          o.createdAtEpoch,
+        ],
       );
       counts.observations++;
     }
@@ -279,7 +310,7 @@ export function importProject(db: Database, data: SmritiExport): ImportResult {
       db.run(
         `INSERT INTO summaries (session_id, project, request, learned, completed, next_steps, created_at_epoch)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [sessionId, project, sm.request, sm.learned, sm.completed, sm.nextSteps, sm.createdAtEpoch]
+        [sessionId, project, sm.request, sm.learned, sm.completed, sm.nextSteps, sm.createdAtEpoch],
       );
       counts.summaries++;
     }
@@ -287,9 +318,9 @@ export function importProject(db: Database, data: SmritiExport): ImportResult {
     // 4. Import reflections
     for (const r of data.reflections) {
       db.run(
-        `INSERT INTO reflections (project, type, insight, category, confidence, created_at_epoch)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [project, r.type, r.insight, r.category, r.confidence, r.createdAtEpoch]
+        `INSERT INTO reflections (project, type, insight, category, confidence, scope, created_at_epoch)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [project, r.type, r.insight, r.category, r.confidence, r.scope ?? 'project', r.createdAtEpoch],
       );
       counts.reflections++;
     }
@@ -300,28 +331,28 @@ export function importProject(db: Database, data: SmritiExport): ImportResult {
       db.run(
         `INSERT INTO developer_profile (project, category, description, confidence, evidence_count, created_at_epoch, updated_at_epoch)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [project, p.category, p.description, p.confidence, p.evidenceCount, now, now]
+        [project, p.category, p.description, p.confidence, p.evidenceCount, now, now],
       );
       counts.profileEntries++;
     }
 
     // 6. Import entities — use INSERT OR IGNORE for unique(project, entity_type, name)
     for (const e of data.entities) {
-      const existing = db.query(
-        'SELECT id FROM entities WHERE project = ? AND entity_type = ? AND name = ?'
-      ).get(project, e.entityType, e.name) as { id: number } | null;
+      const existing = db
+        .query('SELECT id FROM entities WHERE project = ? AND entity_type = ? AND name = ?')
+        .get(project, e.entityType, e.name) as { id: number } | null;
 
       if (existing) {
         // Update mention count and metadata if entity already exists
         db.run(
           'UPDATE entities SET mention_count = mention_count + ?, metadata = COALESCE(?, metadata), last_seen_epoch = ? WHERE id = ?',
-          [e.mentionCount, e.metadata, now, existing.id]
+          [e.mentionCount, e.metadata, now, existing.id],
         );
       } else {
         db.run(
           `INSERT INTO entities (project, entity_type, name, metadata, first_seen_epoch, last_seen_epoch, mention_count)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [project, e.entityType, e.name, e.metadata, now, now, e.mentionCount]
+          [project, e.entityType, e.name, e.metadata, now, now, e.mentionCount],
         );
       }
       counts.entities++;

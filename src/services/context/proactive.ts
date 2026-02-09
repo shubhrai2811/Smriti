@@ -1,9 +1,9 @@
 import type { Database } from 'bun:sqlite';
-import { hybridSearch, type ScoredObservation } from './search.js';
-import { estimateTokens } from './token-counter.js';
-import { updateRetrievalTracking } from '../sqlite/tags.js';
 import { getConfig } from '../../shared/config.js';
 import { logger } from '../../utils/logger.js';
+import { updateRetrievalTracking } from '../sqlite/tags.js';
+import { hybridSearch, type ScoredObservation } from './search.js';
+import { estimateTokens } from './token-counter.js';
 
 export interface ProactiveContextOptions {
   project: string;
@@ -22,11 +22,8 @@ export interface ProactiveContextOptions {
  * This is intentionally much shorter than session-start context — it only
  * surfaces observations that are directly relevant to the current prompt.
  */
-export function buildProactiveContext(
-  db: Database,
-  options: ProactiveContextOptions,
-): string | null {
-  const { project, prompt, promptEmbedding, branch } = options;
+export function buildProactiveContext(db: Database, options: ProactiveContextOptions): string | null {
+  const { project, prompt, promptEmbedding } = options;
   const config = getConfig();
   const proactiveConfig = config.get('proactive');
   const scoring = config.get('scoring');
@@ -60,9 +57,9 @@ export function buildProactiveContext(
   // Filter to observations above the similarity threshold.
   // We check vectorSimilarity since that best captures semantic relevance.
   // When vector search is not available, fall back to composite score threshold.
-  const hasVectorSignals = scoredObservations.some(s => s.signals.vectorSimilarity > 0);
+  const hasVectorSignals = scoredObservations.some((s) => s.signals.vectorSimilarity > 0);
 
-  const relevant = scoredObservations.filter(scored => {
+  const relevant = scoredObservations.filter((scored) => {
     if (hasVectorSignals) {
       return scored.signals.vectorSimilarity >= proactiveConfig.minSimilarity;
     }
@@ -94,10 +91,12 @@ export function buildProactiveContext(
           const fileList = files.slice(0, 3).join(', ');
           line += ` -- affects ${fileList}`;
         }
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
     }
 
-    const lineTokens = estimateTokens(line + '\n');
+    const lineTokens = estimateTokens(`${line}\n`);
     if (tokensUsed + lineTokens > proactiveConfig.tokenBudget) break;
 
     lines.push(line);
@@ -118,7 +117,7 @@ export function buildProactiveContext(
     }
   }
 
-  const context = header + lines.join('\n') + '\n';
+  const context = `${header + lines.join('\n')}\n`;
 
   logger.debug('PROACTIVE', 'Built proactive context', {
     project,

@@ -1,19 +1,21 @@
-import type { PendingMessageRow, ObservationRow } from '../../shared/types.js';
+import type { ObservationRow, PendingMessageRow } from '../../shared/types.js';
 
 /**
  * Build a concise extraction prompt for a batch of tool uses.
  * Target: ~300 tokens for the prompt itself (excluding tool data).
  */
 export function buildExtractionPrompt(messages: PendingMessageRow[]): string {
-  const toolOutputs = messages.map((msg, i) => {
-    const input = truncate(msg.tool_input || '', 2000);
-    const output = truncate(msg.tool_response || '', 3000);
-    return `<tool_use index="${i + 1}">
+  const toolOutputs = messages
+    .map((msg, i) => {
+      const input = truncate(msg.tool_input || '', 2000);
+      const output = truncate(msg.tool_response || '', 3000);
+      return `<tool_use index="${i + 1}">
 <tool>${msg.tool_name || 'unknown'}</tool>
 <input>${input}</input>
 <output>${output}</output>
 </tool_use>`;
-  }).join('\n\n');
+    })
+    .join('\n\n');
 
   return `Extract structured observations from these tool uses in a coding session.
 For each significant action, create an observation. Skip trivial actions (simple file reads with no discoveries, ls commands, etc.).
@@ -27,11 +29,15 @@ Respond with XML observations. Each observation must include:
 - concepts: comma-separated related technologies/concepts
 - files_affected: comma-separated file paths involved
 - importance: 1-10 score (10 = critical bug fix or architectural decision, 1 = trivial)
+- scope: "project" for project-specific knowledge (bugs, architecture, file issues, project config),
+         "global" for developer preferences and patterns that apply across all projects
+         (coding style, tool preferences, language choices, workflow patterns)
 
 <examples>
 <observation>
 <type>bugfix</type>
 <title>Fixed null pointer in user auth middleware</title>
+<scope>project</scope>
 <facts>
 <fact>req.user was undefined when JWT expired</fact>
 <fact>Added null check before accessing req.user.id</fact>
@@ -39,6 +45,17 @@ Respond with XML observations. Each observation must include:
 <concepts>authentication, middleware, JWT</concepts>
 <files_affected>src/middleware/auth.ts</files_affected>
 <importance>7</importance>
+</observation>
+<observation>
+<type>decision</type>
+<title>Developer prefers Bun over Node.js as runtime</title>
+<scope>global</scope>
+<facts>
+<fact>Chose Bun for new CLI project over Node</fact>
+</facts>
+<concepts>bun, nodejs, runtime</concepts>
+<files_affected></files_affected>
+<importance>6</importance>
 </observation>
 </examples>
 
@@ -53,9 +70,7 @@ export function buildSummaryPrompt(
   observations: ObservationRow[],
   lastAssistantMessage: string,
 ): string {
-  const obsDigest = observations.map(o =>
-    `- [${o.type}] ${o.title} (importance: ${o.importance})`
-  ).join('\n');
+  const obsDigest = observations.map((o) => `- [${o.type}] ${o.title} (importance: ${o.importance})`).join('\n');
 
   return `Summarize this coding session concisely.
 
@@ -78,5 +93,5 @@ Respond with a structured summary in XML:
 
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen) + '... [truncated]';
+  return `${text.slice(0, maxLen)}... [truncated]`;
 }

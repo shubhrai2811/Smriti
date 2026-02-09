@@ -1,9 +1,10 @@
 import type { Database } from 'bun:sqlite';
-import { logger } from '../../utils/logger.js';
-import { hybridSearch, type ScoredObservation } from '../context/search.js';
-import { insertObservation, getRecentObservations } from '../sqlite/observations.js';
-import { createSession } from '../sqlite/sessions.js';
 import { basename } from 'path';
+import { logger } from '../../utils/logger.js';
+import { parseTimeExpression } from '../../utils/time-expressions.js';
+import { hybridSearch, type ScoredObservation } from '../context/search.js';
+import { getObservationsByTimeRange, getRecentObservations, insertObservation } from '../sqlite/observations.js';
+import { createSession } from '../sqlite/sessions.js';
 
 // ---------------------------------------------------------------------------
 // JSON-RPC Types
@@ -37,6 +38,7 @@ const TOOL_DEFINITIONS = [
         query: { type: 'string', description: 'Search query text' },
         project: { type: 'string', description: 'Project name (defaults to CWD basename)' },
         limit: { type: 'number', description: 'Max results to return (default 10)' },
+        timeExpr: { type: 'string', description: 'Time filter expression (e.g. "today", "last 3 days", "last week")' },
       },
       required: ['query'],
     },
@@ -68,6 +70,10 @@ const TOOL_DEFINITIONS = [
           type: 'array',
           items: { type: 'string' },
           description: 'File paths affected by this observation',
+        },
+        scope: {
+          type: 'string',
+          description: 'Memory scope: "project" (default) or "global"',
         },
       },
       required: ['title', 'facts'],
@@ -106,13 +112,28 @@ function defaultProject(): string {
   return basename(process.cwd());
 }
 
-function handleSearch(
-  db: Database,
-  args: Record<string, unknown>,
-): unknown {
+function handleSearch(db: Database, args: Record<string, unknown>): unknown {
   const query = args.query as string;
   const project = (args.project as string) || defaultProject();
   const limit = (args.limit as number) || 10;
+  const timeExpr = args.timeExpr as string | undefined;
+
+  // If time expression is provided, filter by time range first
+  if (timeExpr) {
+    const range = parseTimeExpression(timeExpr);
+    if (range) {
+      const timeFiltered = getObservationsByTimeRange(db, project, range.start, range.end, { limit });
+      return timeFiltered.map((r) => ({
+        id: r.id,
+        title: r.title,
+        type: r.type,
+        facts: r.facts ? JSON.parse(r.facts) : [],
+        importance: r.importance,
+        scope: r.scope,
+        createdAt: r.created_at,
+      }));
+    }
+  }
 
   const results: ScoredObservation[] = hybridSearch(db, {
     project,
@@ -131,10 +152,7 @@ function handleSearch(
   }));
 }
 
-function handleSave(
-  db: Database,
-  args: Record<string, unknown>,
-): unknown {
+function handleSave(db: Database, args: Record<string, unknown>): unknown {
   const title = args.title as string;
   const facts = args.facts as string[];
   const type = (args.type as string) || 'discovery';
@@ -142,6 +160,8 @@ function handleSave(
   const importance = (args.importance as number) || 5;
   const concepts = args.concepts as string[] | undefined;
   const filesAffected = args.files_affected as string[] | undefined;
+  const rawScope = args.scope as string | undefined;
+  const scope = (rawScope === 'global' ? 'global' : 'project') as import('../../shared/types.js').MemoryScope;
 
   // Create or reuse an MCP session
   const contentSessionId = `mcp-${Date.now()}`;
@@ -161,15 +181,13 @@ function handleSave(
     importance,
     concepts: concepts ? JSON.stringify(concepts) : undefined,
     filesAffected: filesAffected ? JSON.stringify(filesAffected) : undefined,
+    scope,
   });
 
   return { id, saved: true };
 }
 
-function handleTimeline(
-  db: Database,
-  args: Record<string, unknown>,
-): unknown {
+function handleTimeline(db: Database, args: Record<string, unknown>): unknown {
   const project = (args.project as string) || defaultProject();
   const limit = (args.limit as number) || 20;
 
@@ -185,10 +203,7 @@ function handleTimeline(
   }));
 }
 
-function handleForget(
-  db: Database,
-  args: Record<string, unknown>,
-): unknown {
+function handleForget(db: Database, args: Record<string, unknown>): unknown {
   const id = args.id as number;
 
   db.run('DELETE FROM observations WHERE id = ?', [id]);
@@ -204,12 +219,7 @@ function makeResponse(id: number | string | null, result: unknown): JsonRpcRespo
   return { jsonrpc: '2.0', id, result };
 }
 
-function makeError(
-  id: number | string | null,
-  code: number,
-  message: string,
-  data?: unknown,
-): JsonRpcResponse {
+function makeError(id: number | string | null, code: number, message: string, data?: unknown): JsonRpcResponse {
   return { jsonrpc: '2.0', id, error: { code, message, data } };
 }
 
@@ -315,8 +325,7 @@ export async function startMcpServer(db: Database): Promise<void> {
       buffer += decoder.decode(value, { stream: true });
 
       // Process all complete lines in the buffer
-      let newlineIdx: number;
-      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+      for (let newlineIdx = buffer.indexOf('\n'); newlineIdx !== -1; newlineIdx = buffer.indexOf('\n')) {
         const line = buffer.slice(0, newlineIdx).trim();
         buffer = buffer.slice(newlineIdx + 1);
 
@@ -347,5 +356,5 @@ export async function startMcpServer(db: Database): Promise<void> {
 
 function writeResponse(response: JsonRpcResponse): void {
   const json = JSON.stringify(response);
-  process.stdout.write(json + '\n');
+  process.stdout.write(`${json}\n`);
 }

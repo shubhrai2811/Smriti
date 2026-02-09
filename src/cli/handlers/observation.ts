@@ -1,8 +1,8 @@
-import type { EventHandler, NormalizedHookInput, HookResult } from '../types.js';
-import { getWorkerPort, checkHealth } from '../../infrastructure/process-manager.js';
-import { sanitizeForStorage } from '../../utils/privacy.js';
+import { checkHealth, getWorkerPort } from '../../infrastructure/process-manager.js';
 import { META_TOOLS } from '../../shared/constants.js';
 import { logger } from '../../utils/logger.js';
+import { sanitizeForStorage } from '../../utils/privacy.js';
+import type { EventHandler, HookResult, NormalizedHookInput } from '../types.js';
 
 /**
  * Extract file paths from tool input for gotcha detection.
@@ -30,8 +30,7 @@ function extractFilePaths(_toolName: string | undefined, toolInput: unknown): st
 
   // Extract paths from string content (matches /path/to/file.ext patterns)
   const pathRegex = /(?:^|\s)((?:\/[\w.-]+)+\.\w+)/g;
-  let match: RegExpExecArray | null;
-  while ((match = pathRegex.exec(inputStr)) !== null) {
+  for (let match = pathRegex.exec(inputStr); match !== null; match = pathRegex.exec(inputStr)) {
     if (!paths.includes(match[1])) {
       paths.push(match[1]);
     }
@@ -56,8 +55,12 @@ export const observationHandler: EventHandler = {
 
     try {
       // Sanitize before sending
-      const cleanInput = sanitizeForStorage(typeof toolInput === 'string' ? toolInput : JSON.stringify(toolInput ?? ''));
-      const cleanResponse = sanitizeForStorage(typeof toolResponse === 'string' ? toolResponse : JSON.stringify(toolResponse ?? ''));
+      const cleanInput = sanitizeForStorage(
+        typeof toolInput === 'string' ? toolInput : JSON.stringify(toolInput ?? ''),
+      );
+      const cleanResponse = sanitizeForStorage(
+        typeof toolResponse === 'string' ? toolResponse : JSON.stringify(toolResponse ?? ''),
+      );
 
       const response = await fetch(`http://127.0.0.1:${port}/sessions/${encodeURIComponent(sessionId)}/observe`, {
         method: 'POST',
@@ -95,7 +98,7 @@ export const observationHandler: EventHandler = {
             });
 
             if (gotchaRes.ok) {
-              const gotchaBody = await gotchaRes.json() as { warning?: string };
+              const gotchaBody = (await gotchaRes.json()) as { warning?: string };
               if (gotchaBody.warning) {
                 return {
                   continue: true,

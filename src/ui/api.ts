@@ -12,10 +12,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function fetchApi<T>(
-  path: string,
-  params?: Record<string, string>,
-): Promise<T> {
+export async function fetchApi<T>(path: string, params?: Record<string, string>): Promise<T> {
   const url = new URL(path, BASE_URL);
   if (params) {
     for (const [key, value] of Object.entries(params)) {
@@ -35,10 +32,7 @@ export async function fetchApi<T>(
   return response.json() as Promise<T>;
 }
 
-export async function putApi<T>(
-  path: string,
-  body: unknown,
-): Promise<T> {
+export async function putApi<T>(path: string, body: unknown): Promise<T> {
   const url = new URL(path, BASE_URL);
 
   const response = await fetch(url.toString(), {
@@ -55,10 +49,7 @@ export async function putApi<T>(
   return response.json() as Promise<T>;
 }
 
-export async function postApi<T>(
-  path: string,
-  body: unknown,
-): Promise<T> {
+export async function postApi<T>(path: string, body: unknown): Promise<T> {
   const url = new URL(path, BASE_URL);
 
   const response = await fetch(url.toString(), {
@@ -75,9 +66,7 @@ export async function postApi<T>(
   return response.json() as Promise<T>;
 }
 
-export async function deleteApi<T>(
-  path: string,
-): Promise<T> {
+export async function deleteApi<T>(path: string): Promise<T> {
   const url = new URL(path, BASE_URL);
 
   const response = await fetch(url.toString(), {
@@ -127,4 +116,14 @@ export const api = {
   getHealth: () => fetchApi<{ status: string; uptime: number }>('/health'),
 
   getVersion: () => fetchApi<{ version: string }>('/version'),
+
+  deleteObservation: (id: number) => deleteApi<{ ok: boolean }>(`/data/observations/${id}`),
+
+  updateObservation: (id: number, fields: Record<string, unknown>) => putApi<any>(`/data/observations/${id}`, fields),
+
+  getEntityRelationships: (entityId: number) =>
+    fetchApi<{ relationships: any[] }>(`/data/entities/${entityId}/relationships`),
+
+  getEntityGraph: (project: string, limit = 100) =>
+    fetchApi<{ nodes: any[]; edges: any[] }>('/data/entity-graph', { project, limit: String(limit) }),
 };

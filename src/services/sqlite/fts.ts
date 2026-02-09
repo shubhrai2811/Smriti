@@ -14,19 +14,21 @@ export function searchByKeyword(
 
   // FTS5 MATCH query with BM25 ranking
   // Join with observations table to filter by project
-  const rows = db.query(`
+  const rows = db
+    .query(`
     SELECT
       fts.rowid AS observation_id,
       rank AS rank
     FROM observations_fts fts
     JOIN observations o ON o.id = fts.rowid
     WHERE observations_fts MATCH ?
-      AND o.project = ?
+      AND (o.project = ? OR o.scope = 'global')
     ORDER BY rank
     LIMIT ?
-  `).all(query, project, limit) as Array<{ observation_id: number; rank: number }>;
+  `)
+    .all(query, project, limit) as Array<{ observation_id: number; rank: number }>;
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     observationId: r.observation_id,
     rank: r.rank,
   }));

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'bun:test';
-import { stripPrivateTags, redactSecrets, sanitizeForStorage } from '../../src/utils/privacy';
+import { describe, expect, it } from 'bun:test';
+import { redactSecrets, sanitizeForStorage, stripPrivateTags } from '../../src/utils/privacy';
 
 describe('Privacy E2E', () => {
   describe('stripPrivateTags', () => {
@@ -53,8 +53,9 @@ describe('Privacy E2E', () => {
     });
 
     it('redacts Bearer tokens', () => {
-      const input = 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
-      const { redacted, detected } = redactSecrets(input);
+      const input =
+        'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+      const { redacted } = redactSecrets(input);
       expect(redacted).toContain('[REDACTED:');
     });
 

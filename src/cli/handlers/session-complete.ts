@@ -1,6 +1,6 @@
-import type { EventHandler, NormalizedHookInput, HookResult } from '../types.js';
-import { getWorkerPort, checkHealth } from '../../infrastructure/process-manager.js';
+import { checkHealth, getWorkerPort } from '../../infrastructure/process-manager.js';
 import { logger } from '../../utils/logger.js';
+import type { EventHandler, HookResult, NormalizedHookInput } from '../types.js';
 
 export const sessionCompleteHandler: EventHandler = {
   async execute(input: NormalizedHookInput): Promise<HookResult> {

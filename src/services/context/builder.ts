@@ -1,15 +1,15 @@
 import type { Database } from 'bun:sqlite';
-import { getRecentObservations } from '../sqlite/observations.js';
-import { getLastSummary } from '../sqlite/summaries.js';
-import { getProfileByProject } from '../sqlite/developer-profile.js';
-import { getReflectionsByProject } from '../sqlite/reflections.js';
-import { hybridSearch, type ScoredObservation } from './search.js';
-import { formatObservation, formatSummary, formatEmptyState } from './formatter.js';
-import { getMaskLevel, getSessionAge, maskObservation } from './masking.js';
-import { estimateTokens } from './token-counter.js';
 import { getConfig } from '../../shared/config.js';
 import { logger } from '../../utils/logger.js';
+import { getProfileByProject } from '../sqlite/developer-profile.js';
+import { getRecentObservations } from '../sqlite/observations.js';
+import { getReflectionsByProject } from '../sqlite/reflections.js';
+import { getLastSummary } from '../sqlite/summaries.js';
 import { updateRetrievalTracking } from '../sqlite/tags.js';
+import { formatEmptyState, formatObservation, formatSummary } from './formatter.js';
+import { getMaskLevel, getSessionAge, maskObservation } from './masking.js';
+import { hybridSearch, type ScoredObservation } from './search.js';
+import { estimateTokens } from './token-counter.js';
 
 export interface ContextBuildOptions {
   project: string;
@@ -26,10 +26,7 @@ export interface ContextBuildOptions {
  * Uses hybrid search (vector + FTS5 + recency + importance) when embeddings
  * are available. Falls back to recency + importance sorting otherwise.
  */
-export function buildContext(
-  db: Database,
-  options: ContextBuildOptions,
-): string {
+export function buildContext(db: Database, options: ContextBuildOptions): string {
   const { project, prompt, promptEmbedding, tokenBudget, showInlineSummary } = options;
 
   const lastSummary = getLastSummary(db, project);
@@ -65,7 +62,7 @@ export function buildContext(
   // Fallback: recency + importance sort
   if (scoredObservations.length === 0) {
     const observations = getRecentObservations(db, project, { limit: 50 });
-    scoredObservations = observations.map(obs => ({
+    scoredObservations = observations.map((obs) => ({
       observation: obs,
       score: 0,
       signals: { vectorSimilarity: 0, keywordRelevance: 0, recencyDecay: 0, importanceNorm: 0 },
@@ -96,7 +93,7 @@ export function buildContext(
     const summarySection = formatSummary(lastSummary);
     const summaryTokens = estimateTokens(summarySection);
     if (tokensUsed + summaryTokens < tokenBudget) {
-      sections.push(summarySection + '\n');
+      sections.push(`${summarySection}\n`);
       tokensUsed += summaryTokens;
     }
   }
@@ -104,8 +101,8 @@ export function buildContext(
   // Developer profile (if entries exist)
   const profileEntries = getProfileByProject(db, project, { limit: 10 });
   if (profileEntries.length > 0) {
-    const profileLines = profileEntries.map(p =>
-      `- **[${p.category}]** ${p.description} _(confidence: ${p.confidence.toFixed(1)})_`
+    const profileLines = profileEntries.map(
+      (p) => `- **[${p.category}]** ${p.description} _(confidence: ${p.confidence.toFixed(1)})_`,
     );
     const profileSection = `### Developer Profile\n\n${profileLines.join('\n')}\n\n`;
     const profileTokens = estimateTokens(profileSection);
@@ -118,9 +115,7 @@ export function buildContext(
   // Recent insights from reflections
   const reflections = getReflectionsByProject(db, project, { limit: 5 });
   if (reflections.length > 0) {
-    const insightLines = reflections.map(r =>
-      `- ${r.insight}${r.category ? ` _(${r.category})_` : ''}`
-    );
+    const insightLines = reflections.map((r) => `- ${r.insight}${r.category ? ` _(${r.category})_` : ''}`);
     const insightsSection = `### Insights\n\n${insightLines.join('\n')}\n\n`;
     const insightsTokens = estimateTokens(insightsSection);
     if (tokensUsed + insightsTokens < tokenBudget) {
@@ -140,7 +135,11 @@ export function buildContext(
     let obsSection: string;
     if (maskingEnabled) {
       const sessionAge = getSessionAge(db, scored.observation.session_id, project);
-      const level = getMaskLevel(sessionAge, config.get('masking', 'briefThreshold'), config.get('masking', 'minimalThreshold'));
+      const level = getMaskLevel(
+        sessionAge,
+        config.get('masking', 'briefThreshold'),
+        config.get('masking', 'minimalThreshold'),
+      );
       obsSection = `- ${maskObservation(scored.observation, level)}\n`;
     } else {
       obsSection = formatObservation(scored.observation);
@@ -156,9 +155,10 @@ export function buildContext(
   }
 
   if (observationSections.length > 0) {
-    const sectionHeader = useHybridSearch && scoredObservations.some(s => s.signals.vectorSimilarity > 0)
-      ? '### Relevant Observations\n\n'
-      : '### Recent Observations\n\n';
+    const sectionHeader =
+      useHybridSearch && scoredObservations.some((s) => s.signals.vectorSimilarity > 0)
+        ? '### Relevant Observations\n\n'
+        : '### Recent Observations\n\n';
     sections.push(sectionHeader);
     sections.push(...observationSections);
   }
@@ -178,9 +178,11 @@ export function buildContext(
   if (showInlineSummary) {
     const searchType = useHybridSearch ? 'hybrid' : 'recency';
     // Detect multi-IDE sources
-    const sourceIdes = new Set(scoredObservations.map(s => s.observation.source_ide).filter(Boolean));
+    const sourceIdes = new Set(scoredObservations.map((s) => s.observation.source_ide).filter(Boolean));
     const sourceSuffix = sourceIdes.size > 1 ? ` | sources: ${[...sourceIdes].join(', ')}` : '';
-    sections.push(`\n[smriti: ${observationCount} observations | ${tokensUsed.toLocaleString()} tokens | ${searchType}${sourceSuffix}]`);
+    sections.push(
+      `\n[smriti: ${observationCount} observations | ${tokensUsed.toLocaleString()} tokens | ${searchType}${sourceSuffix}]`,
+    );
   }
 
   return sections.join('');

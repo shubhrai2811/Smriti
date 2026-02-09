@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApi } from '../hooks.js';
-import { colors, categoryColors, baseStyles, formatTime, confidenceBar, parseJsonArray } from '../theme.js';
-import type { ReflectionsResponse, ReflectionRow } from '../types.js';
+import { baseStyles, categoryColors, colors, confidenceBar, formatTime, parseJsonArray } from '../theme.js';
+import type { ReflectionRow, ReflectionsResponse } from '../types.js';
 
 function ReflectionCard({ reflection }: { reflection: ReflectionRow }) {
   const [expanded, setExpanded] = useState(false);
@@ -10,12 +10,17 @@ function ReflectionCard({ reflection }: { reflection: ReflectionRow }) {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       style={{
         ...baseStyles.card,
         cursor: 'pointer',
-        borderColor: expanded ? catColor + '60' : colors.border,
+        borderColor: expanded ? `${catColor}60` : colors.border,
       }}
       onClick={() => setExpanded(!expanded)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') setExpanded(!expanded);
+      }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -23,13 +28,9 @@ function ReflectionCard({ reflection }: { reflection: ReflectionRow }) {
             <span style={baseStyles.badge(reflection.type === 'deep' ? colors.accentPurple : colors.accentBlue)}>
               {reflection.type}
             </span>
-            {reflection.category && (
-              <span style={baseStyles.badge(catColor)}>{reflection.category}</span>
-            )}
+            {reflection.category && <span style={baseStyles.badge(catColor)}>{reflection.category}</span>}
           </div>
-          <div style={{ fontSize: '14px', color: colors.textPrimary, lineHeight: '1.5' }}>
-            {reflection.insight}
-          </div>
+          <div style={{ fontSize: '14px', color: colors.textPrimary, lineHeight: '1.5' }}>{reflection.insight}</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
           <span style={baseStyles.timestamp}>{formatTime(reflection.created_at_epoch)}</span>
@@ -43,7 +44,9 @@ function ReflectionCard({ reflection }: { reflection: ReflectionRow }) {
             <div>
               <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '4px' }}>Confidence</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '13px', color: colors.textPrimary, fontFamily: 'monospace', letterSpacing: '1px' }}>
+                <span
+                  style={{ fontSize: '13px', color: colors.textPrimary, fontFamily: 'monospace', letterSpacing: '1px' }}
+                >
                   {confidenceBar(reflection.confidence)}
                 </span>
                 <span style={{ fontSize: '12px', color: colors.textSecondary }}>
@@ -59,11 +62,13 @@ function ReflectionCard({ reflection }: { reflection: ReflectionRow }) {
 
             {sourceIds.length > 0 && (
               <div>
-                <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '4px' }}>Source Observations</div>
+                <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '4px' }}>
+                  Source Observations
+                </div>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                  {sourceIds.map((id, i) => (
+                  {sourceIds.map((id) => (
                     <span
-                      key={i}
+                      key={id}
                       style={{
                         fontSize: '11px',
                         color: colors.accentBlue,
@@ -172,9 +177,7 @@ export function Reflections() {
       )}
 
       {/* Show flat list when type filter is active */}
-      {typeFilter && reflections.map((r) => (
-        <ReflectionCard key={r.id} reflection={r} />
-      ))}
+      {typeFilter && reflections.map((r) => <ReflectionCard key={r.id} reflection={r} />)}
     </div>
   );
 }

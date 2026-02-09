@@ -1,5 +1,5 @@
-import { basename, join, dirname } from 'path';
-import { statSync, readFileSync, existsSync } from 'fs';
+import { existsSync, readFileSync, statSync } from 'fs';
+import { basename, dirname, join } from 'path';
 
 /**
  * Gets the current git branch for the given working directory.
@@ -64,7 +64,7 @@ function detectFromCargoToml(cwd: string): string | null {
     if (!existsSync(cargoPath)) return null;
     const content = readFileSync(cargoPath, 'utf-8');
     const match = content.match(/\[package\][\s\S]*?name\s*=\s*"([^"]+)"/);
-    if (match && match[1]) {
+    if (match?.[1]) {
       return match[1].trim();
     }
     return null;
@@ -82,10 +82,14 @@ function detectFromGoMod(cwd: string): string | null {
     if (!existsSync(goModPath)) return null;
     const content = readFileSync(goModPath, 'utf-8');
     const match = content.match(/^module\s+(.+)$/m);
-    if (match && match[1]) {
+    if (match?.[1]) {
       const modulePath = match[1].trim();
-      // Extract last path segment (e.g., "github.com/org/repo" -> "repo")
       const segments = modulePath.split('/');
+      // Use org/repo for hosted modules (e.g., "github.com/org/repo" -> "org/repo")
+      // Use full path for short modules (e.g., "myapp" -> "myapp")
+      if (segments.length >= 3) {
+        return segments.slice(-2).join('/');
+      }
       const lastSegment = segments[segments.length - 1];
       if (lastSegment && lastSegment.length > 0) {
         return lastSegment;
@@ -109,13 +113,13 @@ function detectFromPyprojectToml(cwd: string): string | null {
 
     // Try [project] section first
     const projectMatch = content.match(/\[project\][\s\S]*?name\s*=\s*"([^"]+)"/);
-    if (projectMatch && projectMatch[1]) {
+    if (projectMatch?.[1]) {
       return projectMatch[1].trim();
     }
 
     // Try [tool.poetry] section
     const poetryMatch = content.match(/\[tool\.poetry\][\s\S]*?name\s*=\s*"([^"]+)"/);
-    if (poetryMatch && poetryMatch[1]) {
+    if (poetryMatch?.[1]) {
       return poetryMatch[1].trim();
     }
 
@@ -145,13 +149,13 @@ function detectFromGitRemote(cwd: string): string | null {
 
     // Try SSH format: git@github.com:org/repo.git
     const sshMatch = url.match(/^git@[^:]+:(.+?)(?:\.git)?$/);
-    if (sshMatch && sshMatch[1]) {
+    if (sshMatch?.[1]) {
       return sshMatch[1];
     }
 
     // Try HTTPS format: https://github.com/org/repo.git or https://github.com/org/repo
     const httpsMatch = url.match(/^https?:\/\/[^/]+\/(.+?)(?:\.git)?$/);
-    if (httpsMatch && httpsMatch[1]) {
+    if (httpsMatch?.[1]) {
       return httpsMatch[1];
     }
 
@@ -161,7 +165,50 @@ function detectFromGitRemote(cwd: string): string | null {
   }
 }
 
+/** Common folder names that are too generic to use as project identifiers alone */
+const GENERIC_NAMES = new Set([
+  'api',
+  'app',
+  'web',
+  'backend',
+  'frontend',
+  'server',
+  'client',
+  'service',
+  'services',
+  'lib',
+  'core',
+  'src',
+  'pkg',
+  'cmd',
+  'modules',
+  'packages',
+  'workspace',
+  'monorepo',
+  'project',
+]);
+
 type DetectionSource = 'package.json' | 'Cargo.toml' | 'go.mod' | 'pyproject.toml' | 'git-remote' | 'basename';
+
+/**
+ * Build a unique-enough project name from the directory path.
+ * For generic folder names (api, backend, etc.), includes the parent directory
+ * to disambiguate: "/work/client-a/api" → "client-a/api" instead of just "api".
+ */
+function buildBasenameFallback(cwd: string): string {
+  const name = basename(cwd);
+  if (!name) return 'unknown';
+
+  // If the name is generic, prefix with parent dir for uniqueness
+  if (GENERIC_NAMES.has(name.toLowerCase())) {
+    const parent = basename(dirname(cwd));
+    if (parent && parent !== '.' && parent !== '/') {
+      return `${parent}/${name}`;
+    }
+  }
+
+  return name;
+}
 
 /**
  * Internal detection pipeline. Returns the name and which source detected it.
@@ -182,7 +229,7 @@ function detectProject(cwd: string): { name: string; source: DetectionSource } {
     }
   }
 
-  return { name: basename(cwd) || 'unknown', source: 'basename' };
+  return { name: buildBasenameFallback(cwd), source: 'basename' };
 }
 
 /**
@@ -266,7 +313,7 @@ export function getWorktreeMainRoot(cwd: string): string {
     if (!toplevel) return cwd;
 
     const gitPath = join(toplevel, '.git');
-    let stat;
+    let stat: ReturnType<typeof statSync> | undefined;
     try {
       stat = statSync(gitPath);
     } catch {
@@ -306,15 +353,12 @@ export function getWorktreeMainRoot(cwd: string): string {
 export function getMainBranch(cwd: string): string {
   try {
     // Try symbolic-ref first (works when origin/HEAD is set)
-    const result = Bun.spawnSync(
-      ['git', 'symbolic-ref', 'refs/remotes/origin/HEAD'],
-      {
-        cwd,
-        timeout: 2_000,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      }
-    );
+    const result = Bun.spawnSync(['git', 'symbolic-ref', 'refs/remotes/origin/HEAD'], {
+      cwd,
+      timeout: 2_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
 
     if (result.exitCode === 0) {
       const ref = result.stdout.toString().trim();
@@ -328,15 +372,12 @@ export function getMainBranch(cwd: string): string {
 
   // Fallback: check if 'main' branch exists
   try {
-    const mainCheck = Bun.spawnSync(
-      ['git', 'show-ref', '--verify', 'refs/heads/main'],
-      {
-        cwd,
-        timeout: 2_000,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      }
-    );
+    const mainCheck = Bun.spawnSync(['git', 'show-ref', '--verify', 'refs/heads/main'], {
+      cwd,
+      timeout: 2_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
 
     if (mainCheck.exitCode === 0) {
       return 'main';
@@ -347,15 +388,12 @@ export function getMainBranch(cwd: string): string {
 
   // Fallback: check if 'master' branch exists
   try {
-    const masterCheck = Bun.spawnSync(
-      ['git', 'show-ref', '--verify', 'refs/heads/master'],
-      {
-        cwd,
-        timeout: 2_000,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      }
-    );
+    const masterCheck = Bun.spawnSync(['git', 'show-ref', '--verify', 'refs/heads/master'], {
+      cwd,
+      timeout: 2_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
 
     if (masterCheck.exitCode === 0) {
       return 'master';

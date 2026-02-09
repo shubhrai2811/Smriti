@@ -1,7 +1,14 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { fetchApi } from '../api.js';
 import { useApi } from '../hooks.js';
-import { colors, baseStyles, formatTime } from '../theme.js';
-import type { EntitiesResponse, HotspotsResponse, EntityRow } from '../types.js';
+import { baseStyles, colors, formatTime } from '../theme.js';
+import type {
+  EntitiesResponse,
+  EntityRelationshipRow,
+  EntityRelationshipsResponse,
+  EntityRow,
+  HotspotsResponse,
+} from '../types.js';
 
 const ENTITY_TYPE_OPTIONS = ['All', 'file', 'function', 'error_pattern', 'dependency', 'concept'] as const;
 
@@ -61,29 +68,84 @@ function HotspotCard({ entity }: { entity: EntityRow }) {
         </span>
       </div>
 
-      {entity.metadata && (() => {
-        try {
-          const meta = JSON.parse(entity.metadata);
-          const entries = Object.entries(meta).slice(0, 3);
-          if (entries.length === 0) return null;
+      {entity.metadata &&
+        (() => {
+          try {
+            const meta = JSON.parse(entity.metadata);
+            const entries = Object.entries(meta).slice(0, 3);
+            if (entries.length === 0) return null;
+            return (
+              <div style={{ fontSize: '11px', color: colors.textMuted }}>
+                {entries.map(([key, value]) => (
+                  <span key={key} style={{ marginRight: '10px' }}>
+                    {key}: {String(value)}
+                  </span>
+                ))}
+              </div>
+            );
+          } catch {
+            return null;
+          }
+        })()}
+    </div>
+  );
+}
+
+function RelationshipsSection({ entityId }: { entityId: number }) {
+  const [relationships, setRelationships] = useState<EntityRelationshipRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchRelationships = useCallback(async () => {
+    try {
+      const result = await fetchApi<EntityRelationshipsResponse>(`/data/entities/${entityId}/relationships`);
+      setRelationships(result.relationships);
+    } catch {
+      // Non-critical
+    } finally {
+      setLoading(false);
+    }
+  }, [entityId]);
+
+  useEffect(() => {
+    fetchRelationships();
+  }, [fetchRelationships]);
+
+  if (loading)
+    return <div style={{ fontSize: '12px', color: colors.textMuted, padding: '8px 0' }}>Loading relationships...</div>;
+  if (relationships.length === 0)
+    return <div style={{ fontSize: '12px', color: colors.textMuted, padding: '8px 0' }}>No relationships found.</div>;
+
+  return (
+    <div style={{ padding: '8px 0' }}>
+      <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '6px', fontWeight: 500 }}>
+        Relationships
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {relationships.map((rel) => {
+          const isSource = rel.source_entity_id === entityId;
+          const otherName = isSource ? rel.target_name : rel.source_name;
+          const otherType = isSource ? rel.target_type : rel.source_type;
+          const direction = isSource ? '\u2192' : '\u2190';
+          const relColor = getEntityColor(otherType || '');
+
           return (
-            <div style={{ fontSize: '11px', color: colors.textMuted }}>
-              {entries.map(([key, value]) => (
-                <span key={key} style={{ marginRight: '10px' }}>
-                  {key}: {String(value)}
-                </span>
-              ))}
+            <div key={rel.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+              <span style={{ color: colors.textMuted }}>{direction}</span>
+              <span style={{ color: colors.textSecondary }}>{rel.relationship_type}</span>
+              <span style={{ color: relColor, fontWeight: 500 }}>{otherName}</span>
+              <span style={{ color: colors.textMuted, fontSize: '11px' }}>({otherType})</span>
+              <span style={{ color: colors.textMuted, fontSize: '11px' }}>x{rel.evidence_count}</span>
             </div>
           );
-        } catch {
-          return null;
-        }
-      })()}
+        })}
+      </div>
     </div>
   );
 }
 
 function EntityTable({ entities }: { entities: EntityRow[] }) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
   if (entities.length === 0) {
     return <div style={baseStyles.emptyState}>No entities found.</div>;
   }
@@ -104,46 +166,51 @@ function EntityTable({ entities }: { entities: EntityRow[] }) {
         <tbody>
           {entities.map((entity) => {
             const color = getEntityColor(entity.entity_type);
+            const isExpanded = expandedId === entity.id;
             return (
-              <tr
-                key={entity.id}
-                style={{ transition: 'background 0.1s' }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = colors.surfaceHover;
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = 'transparent';
-                }}
-              >
-                <td
-                  style={{
-                    ...baseStyles.td,
-                    fontWeight: 500,
-                    maxWidth: '300px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+              <>
+                <tr
+                  key={entity.id}
+                  style={{ transition: 'background 0.1s', cursor: 'pointer' }}
+                  onClick={() => setExpandedId(isExpanded ? null : entity.id)}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.background = colors.surfaceHover;
                   }}
-                  title={entity.name}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.background = 'transparent';
+                  }}
                 >
-                  {entity.name}
-                </td>
-                <td style={baseStyles.td}>
-                  <span style={baseStyles.badge(color)}>{entity.entity_type.replace('_', ' ')}</span>
-                </td>
-                <td style={{ ...baseStyles.td, textAlign: 'right' as const, fontWeight: 600, color }}>
-                  {entity.mention_count}
-                </td>
-                <td style={{ ...baseStyles.td, ...baseStyles.timestamp }}>
-                  {formatTime(entity.first_seen_epoch)}
-                </td>
-                <td style={{ ...baseStyles.td, ...baseStyles.timestamp }}>
-                  {formatTime(entity.last_seen_epoch)}
-                </td>
-                <td style={{ ...baseStyles.td, fontSize: '12px', color: colors.textSecondary }}>
-                  {entity.project}
-                </td>
-              </tr>
+                  <td
+                    style={{
+                      ...baseStyles.td,
+                      fontWeight: 500,
+                      maxWidth: '300px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={entity.name}
+                  >
+                    {entity.name}
+                  </td>
+                  <td style={baseStyles.td}>
+                    <span style={baseStyles.badge(color)}>{entity.entity_type.replace('_', ' ')}</span>
+                  </td>
+                  <td style={{ ...baseStyles.td, textAlign: 'right' as const, fontWeight: 600, color }}>
+                    {entity.mention_count}
+                  </td>
+                  <td style={{ ...baseStyles.td, ...baseStyles.timestamp }}>{formatTime(entity.first_seen_epoch)}</td>
+                  <td style={{ ...baseStyles.td, ...baseStyles.timestamp }}>{formatTime(entity.last_seen_epoch)}</td>
+                  <td style={{ ...baseStyles.td, fontSize: '12px', color: colors.textSecondary }}>{entity.project}</td>
+                </tr>
+                {isExpanded && (
+                  <tr key={`${entity.id}-rel`}>
+                    <td colSpan={6} style={{ ...baseStyles.td, background: colors.bg, padding: '8px 16px' }}>
+                      <RelationshipsSection entityId={entity.id} />
+                    </td>
+                  </tr>
+                )}
+              </>
             );
           })}
         </tbody>
@@ -158,15 +225,17 @@ export function Entities() {
 
   const entityTypeParam = entityType === 'All' ? '' : entityType;
 
-  const { data: hotspotsData, loading: hotspotsLoading, error: hotspotsError } = useApi<HotspotsResponse>(
-    '/data/hotspots',
-    { project, entityType: entityTypeParam, limit: '20' },
-  );
+  const {
+    data: hotspotsData,
+    loading: hotspotsLoading,
+    error: hotspotsError,
+  } = useApi<HotspotsResponse>('/data/hotspots', { project, entityType: entityTypeParam, limit: '20' });
 
-  const { data: entitiesData, loading: entitiesLoading, error: entitiesError } = useApi<EntitiesResponse>(
-    '/data/entities',
-    { project, entityType: entityTypeParam, limit: '50' },
-  );
+  const {
+    data: entitiesData,
+    loading: entitiesLoading,
+    error: entitiesError,
+  } = useApi<EntitiesResponse>('/data/entities', { project, entityType: entityTypeParam, limit: '50' });
 
   const hotspots = hotspotsData?.hotspots ?? [];
   const entities = entitiesData?.entities ?? [];

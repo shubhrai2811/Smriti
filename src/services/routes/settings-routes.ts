@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { getConfig } from '../../shared/config.js';
 import type { SmritiSettings } from '../../shared/config.js';
+import { getConfig } from '../../shared/config.js';
 
 export function settingsRoutes(): Hono {
   const app = new Hono();
@@ -14,7 +14,7 @@ export function settingsRoutes(): Hono {
   // PUT /settings — update settings by section.key
   // Body: { "worker": { "port": 8080 }, "context": { "tokenBudget": 6000 } }
   app.put('/', async (c) => {
-    const body = await c.req.json() as Partial<SmritiSettings>;
+    const body = (await c.req.json()) as Partial<SmritiSettings>;
     const config = getConfig();
     const allSettings = config.getAll() as Record<string, Record<string, unknown>>;
 

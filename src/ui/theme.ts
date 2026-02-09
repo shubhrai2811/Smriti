@@ -71,16 +71,17 @@ export const baseStyles = {
     marginBottom: '12px',
   } as React.CSSProperties,
 
-  badge: (color: string) => ({
-    display: 'inline-block',
-    padding: '2px 8px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    color: color,
-    background: `${color}20`,
-    border: `1px solid ${color}40`,
-  }) as React.CSSProperties,
+  badge: (color: string) =>
+    ({
+      display: 'inline-block',
+      padding: '2px 8px',
+      borderRadius: '12px',
+      fontSize: '12px',
+      fontWeight: 500,
+      color: color,
+      background: `${color}20`,
+      border: `1px solid ${color}40`,
+    }) as React.CSSProperties,
 
   timestamp: {
     fontSize: '12px',

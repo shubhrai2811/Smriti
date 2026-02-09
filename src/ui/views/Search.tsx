@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useApi } from '../hooks.js';
-import { colors, typeColors, baseStyles, formatTime, parseJsonArray } from '../theme.js';
-import type { ObservationsResponse, ObservationRow } from '../types.js';
+import { baseStyles, colors, formatTime, parseJsonArray, typeColors } from '../theme.js';
+import type { ObservationRow, ObservationsResponse } from '../types.js';
 
 function SearchResultCard({ obs, query }: { obs: ObservationRow; query: string }) {
   const [expanded, setExpanded] = useState(false);
@@ -16,25 +16,51 @@ function SearchResultCard({ obs, query }: { obs: ObservationRow; query: string }
     const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
     const parts = text.split(regex);
     return parts.map((part, i) =>
-      regex.test(part)
-        ? <span key={i} style={{ background: `${colors.accentOrange}40`, color: colors.accentOrange, borderRadius: '2px', padding: '0 1px' }}>{part}</span>
-        : part,
+      regex.test(part) ? (
+        <span
+          key={`${i}-${part}`}
+          style={{
+            background: `${colors.accentOrange}40`,
+            color: colors.accentOrange,
+            borderRadius: '2px',
+            padding: '0 1px',
+          }}
+        >
+          {part}
+        </span>
+      ) : (
+        <span key={`${i}-${part}`}>{part}</span>
+      ),
     );
   }
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       style={{
         ...baseStyles.card,
         cursor: 'pointer',
-        borderColor: expanded ? typeColor + '60' : colors.border,
+        borderColor: expanded ? `${typeColor}60` : colors.border,
       }}
       onClick={() => setExpanded(!expanded)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') setExpanded(!expanded);
+      }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
           <span style={baseStyles.badge(typeColor)}>{obs.type}</span>
-          <span style={{ fontSize: '14px', fontWeight: 500, color: colors.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span
+            style={{
+              fontSize: '14px',
+              fontWeight: 500,
+              color: colors.textPrimary,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {highlight(obs.title)}
           </span>
         </div>
@@ -50,8 +76,10 @@ function SearchResultCard({ obs, query }: { obs: ObservationRow; query: string }
           {facts
             .filter((f) => f.toLowerCase().includes(query.toLowerCase()))
             .slice(0, 2)
-            .map((fact, i) => (
-              <div key={i} style={{ marginBottom: '2px' }}>... {highlight(fact)}</div>
+            .map((fact) => (
+              <div key={fact} style={{ marginBottom: '2px' }}>
+                ... {highlight(fact)}
+              </div>
             ))}
         </div>
       )}
@@ -74,10 +102,14 @@ function SearchResultCard({ obs, query }: { obs: ObservationRow; query: string }
 
           {facts.length > 0 && (
             <div style={{ marginBottom: '10px' }}>
-              <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '6px', fontWeight: 500 }}>Facts</div>
+              <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '6px', fontWeight: 500 }}>
+                Facts
+              </div>
               <ul style={{ margin: 0, paddingLeft: '18px' }}>
-                {facts.map((fact, i) => (
-                  <li key={i} style={{ fontSize: '13px', color: colors.textPrimary, marginBottom: '3px' }}>{highlight(fact)}</li>
+                {facts.map((fact) => (
+                  <li key={fact} style={{ fontSize: '13px', color: colors.textPrimary, marginBottom: '3px' }}>
+                    {highlight(fact)}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -85,10 +117,14 @@ function SearchResultCard({ obs, query }: { obs: ObservationRow; query: string }
 
           {concepts.length > 0 && (
             <div style={{ marginBottom: '10px' }}>
-              <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '6px', fontWeight: 500 }}>Concepts</div>
+              <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '6px', fontWeight: 500 }}>
+                Concepts
+              </div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {concepts.map((concept, i) => (
-                  <span key={i} style={baseStyles.badge(colors.accentBlue)}>{highlight(concept)}</span>
+                {concepts.map((concept) => (
+                  <span key={concept} style={baseStyles.badge(colors.accentBlue)}>
+                    {highlight(concept)}
+                  </span>
                 ))}
               </div>
             </div>
@@ -96,11 +132,13 @@ function SearchResultCard({ obs, query }: { obs: ObservationRow; query: string }
 
           {files.length > 0 && (
             <div>
-              <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '6px', fontWeight: 500 }}>Files</div>
+              <div style={{ fontSize: '12px', color: colors.textSecondary, marginBottom: '6px', fontWeight: 500 }}>
+                Files
+              </div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {files.map((file, i) => (
+                {files.map((file) => (
                   <span
-                    key={i}
+                    key={file}
                     style={{
                       fontSize: '12px',
                       color: colors.accentOrange,
@@ -126,10 +164,7 @@ export function Search() {
   const [query, setQuery] = useState('');
 
   // Load all observations for client-side search
-  const { data, loading, error } = useApi<ObservationsResponse>(
-    '/data/observations',
-    { project: '', limit: '200' },
-  );
+  const { data, loading, error } = useApi<ObservationsResponse>('/data/observations', { project: '', limit: '200' });
 
   const allObservations = data?.observations ?? [];
 
@@ -162,7 +197,6 @@ export function Search() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           style={baseStyles.input}
-          autoFocus
         />
       </div>
 
@@ -176,15 +210,11 @@ export function Search() {
       )}
 
       {!loading && !error && !query.trim() && (
-        <div style={baseStyles.emptyState}>
-          Type a search query to find observations.
-        </div>
+        <div style={baseStyles.emptyState}>Type a search query to find observations.</div>
       )}
 
       {!loading && !error && query.trim() && results.length === 0 && (
-        <div style={baseStyles.emptyState}>
-          No observations matching "{query}".
-        </div>
+        <div style={baseStyles.emptyState}>No observations matching "{query}".</div>
       )}
 
       {results.map((obs) => (

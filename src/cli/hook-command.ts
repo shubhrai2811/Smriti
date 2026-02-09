@@ -1,21 +1,16 @@
-import { readJsonFromStdin } from './stdin-reader.js';
-import { getAdapter, detectPlatform } from './adapters/index.js';
-import { getHandler } from './handlers/index.js';
 import { HOOK_EXIT_CODES } from '../shared/constants.js';
 import { logger } from '../utils/logger.js';
+import { detectPlatform, getAdapter } from './adapters/index.js';
+import { getHandler } from './handlers/index.js';
+import { readJsonFromStdin } from './stdin-reader.js';
 
-export async function hookCommand(
-  platform: string,
-  event: string,
-): Promise<number> {
+export async function hookCommand(platform: string, event: string): Promise<number> {
   try {
     const handler = getHandler(event);
     const rawInput = await readJsonFromStdin();
 
     // Resolve platform before fetching the adapter so 'auto' works
-    const resolvedPlatform = platform === 'auto'
-      ? detectPlatform(rawInput)
-      : platform;
+    const resolvedPlatform = platform === 'auto' ? detectPlatform(rawInput) : platform;
 
     const adapter = getAdapter(resolvedPlatform);
     const input = adapter.normalizeInput(rawInput);

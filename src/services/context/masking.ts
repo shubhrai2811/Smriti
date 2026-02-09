@@ -20,10 +20,12 @@ export function getMaskLevel(sessionAge: number, briefThreshold: number = 3, min
  * Returns 0 for the most recent session, 1 for one session ago, etc.
  */
 export function getSessionAge(db: Database, sessionId: number, project: string): number {
-  const result = db.query(
-    `SELECT COUNT(*) as count FROM sessions
-     WHERE project = ? AND status = 'completed' AND id > ?`
-  ).get(project, sessionId) as { count: number };
+  const result = db
+    .query(
+      `SELECT COUNT(*) as count FROM sessions
+     WHERE project = ? AND status = 'completed' AND id > ?`,
+    )
+    .get(project, sessionId) as { count: number };
   return result.count;
 }
 

@@ -1,21 +1,33 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { createTestContext } from '../fixtures/helpers';
-import { insertObservation } from '../../src/services/sqlite/observations';
-import { insertReflection, getReflectionsByProject, getReflectionsBySession } from '../../src/services/sqlite/reflections';
-import { insertProfileEntry, getProfileByProject, updateProfileConfidence, findSimilarProfileEntry } from '../../src/services/sqlite/developer-profile';
-import { insertLink, getLinksByObservation, countLinks } from '../../src/services/sqlite/observation-links';
-import { insertEmbedding } from '../../src/services/sqlite/vectors';
-import { parseQuickReflectionResponse, parseDeepReflectionResponse } from '../../src/services/reflection/response-parser';
-import { buildQuickReflectionPrompt, buildDeepReflectionPrompt } from '../../src/services/reflection/prompts';
-import { quickReflect } from '../../src/services/reflection/quick-reflection';
-import { shouldRunDeepReflection, deepReflect } from '../../src/services/reflection/deep-reflection';
-import { autoLink } from '../../src/services/reflection/auto-linker';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { buildContext } from '../../src/services/context/builder';
+import { autoLink } from '../../src/services/reflection/auto-linker';
+import { deepReflect, shouldRunDeepReflection } from '../../src/services/reflection/deep-reflection';
+import { buildDeepReflectionPrompt, buildQuickReflectionPrompt } from '../../src/services/reflection/prompts';
+import { quickReflect } from '../../src/services/reflection/quick-reflection';
+import {
+  parseDeepReflectionResponse,
+  parseQuickReflectionResponse,
+} from '../../src/services/reflection/response-parser';
+import {
+  findSimilarProfileEntry,
+  getProfileByProject,
+  insertProfileEntry,
+  updateProfileConfidence,
+} from '../../src/services/sqlite/developer-profile';
+import { countLinks, getLinksByObservation, insertLink } from '../../src/services/sqlite/observation-links';
+import { insertObservation } from '../../src/services/sqlite/observations';
+import {
+  getReflectionsByProject,
+  getReflectionsBySession,
+  insertReflection,
+} from '../../src/services/sqlite/reflections';
+import { insertEmbedding } from '../../src/services/sqlite/vectors';
+import { createTestContext } from '../fixtures/helpers';
 
 // Helper: create a test session and return its ID
 function createTestSession(db: any, project: string = '/tmp/test-project', status: string = 'active'): number {
   db.query(
-    'INSERT INTO sessions (content_session_id, project, branch, status, created_at_epoch) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO sessions (content_session_id, project, branch, status, created_at_epoch) VALUES (?, ?, ?, ?, ?)',
   ).run(`test-${Date.now()}-${Math.random()}`, project, 'main', status, Date.now());
   return (db.query('SELECT last_insert_rowid() as id').get() as any).id;
 }
@@ -37,7 +49,7 @@ function seededEmbedding(seed: number): Float32Array {
 function perturbedEmbedding(base: Float32Array, noise: number = 0.02): Float32Array {
   const arr = new Float32Array(384);
   for (let i = 0; i < 384; i++) {
-    arr[i] = base[i] + (Math.sin(i * 7.3) * noise);
+    arr[i] = base[i] + Math.sin(i * 7.3) * noise;
   }
   let norm = 0;
   for (let i = 0; i < 384; i++) norm += arr[i] * arr[i];
@@ -101,7 +113,7 @@ describe('Reflection E2E', () => {
   describe('Reflection CRUD', () => {
     it('inserts and retrieves reflections', () => {
       const sessionId = createTestSession(ctx.db);
-      const id = insertReflection(ctx.db, {
+      const _id = insertReflection(ctx.db, {
         sessionId,
         project: '/tmp/test',
         type: 'quick',
@@ -183,7 +195,7 @@ describe('Reflection E2E', () => {
 
       const found = findSimilarProfileEntry(ctx.db, '/tmp/test', 'preference', 'Prefers functional composition');
       expect(found).not.toBeNull();
-      expect(found!.description).toContain('functional composition');
+      expect(found?.description).toContain('functional composition');
 
       const notFound = findSimilarProfileEntry(ctx.db, '/tmp/test', 'preference', 'Uses microservices architecture');
       expect(notFound).toBeNull();
@@ -194,10 +206,16 @@ describe('Reflection E2E', () => {
     it('creates and retrieves observation links', () => {
       const session = createTestSession(ctx.db);
       const obs1 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Obs A',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Obs A',
       });
       const obs2 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Obs B',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Obs B',
       });
 
       insertLink(ctx.db, { sourceId: obs1, targetId: obs2, linkType: 'related', confidence: 0.9 });
@@ -210,10 +228,16 @@ describe('Reflection E2E', () => {
     it('prevents duplicate links', () => {
       const session = createTestSession(ctx.db);
       const obs1 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Obs A',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Obs A',
       });
       const obs2 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Obs B',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Obs B',
       });
 
       insertLink(ctx.db, { sourceId: obs1, targetId: obs2, linkType: 'related', confidence: 0.9 });
@@ -265,8 +289,10 @@ describe('Reflection E2E', () => {
     });
 
     it('limits quick reflection to 3 insights', () => {
-      const manyInsights = Array.from({ length: 5 }, (_, i) =>
-        `<insight category="pattern" confidence="0.5"><text>Insight ${i}</text><sources>${i + 1}</sources></insight>`
+      const manyInsights = Array.from(
+        { length: 5 },
+        (_, i) =>
+          `<insight category="pattern" confidence="0.5"><text>Insight ${i}</text><sources>${i + 1}</sources></insight>`,
       ).join('');
       const response = `<reflections>${manyInsights}</reflections>`;
       const insights = parseQuickReflectionResponse(response, [1, 2, 3, 4, 5]);
@@ -279,7 +305,9 @@ describe('Reflection E2E', () => {
       const session = createTestSession(ctx.db);
       for (let i = 0; i < 3; i++) {
         insertObservation(ctx.db, {
-          sessionId: session, project: '/tmp/test', type: 'discovery',
+          sessionId: session,
+          project: '/tmp/test',
+          type: 'discovery',
           title: `Authentication middleware pattern ${i}`,
           importance: 7,
         });
@@ -296,7 +324,10 @@ describe('Reflection E2E', () => {
     it('skips when too few observations', async () => {
       const session = createTestSession(ctx.db);
       insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Single obs',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Single obs',
       });
 
       const stored = await quickReflect(ctx.db, mockProvider, session, '/tmp/test');
@@ -307,13 +338,18 @@ describe('Reflection E2E', () => {
       const session = createTestSession(ctx.db);
       for (let i = 0; i < 3; i++) {
         insertObservation(ctx.db, {
-          sessionId: session, project: '/tmp/test', type: 'discovery', title: `Obs ${i}`,
+          sessionId: session,
+          project: '/tmp/test',
+          type: 'discovery',
+          title: `Obs ${i}`,
         });
       }
 
       const failingProvider = {
         name: 'failing',
-        extract: async () => { throw new Error('AI unavailable'); },
+        extract: async () => {
+          throw new Error('AI unavailable');
+        },
         isAvailable: async () => false,
         getLastUsage: () => null,
       };
@@ -358,7 +394,9 @@ describe('Reflection E2E', () => {
         const session = createTestSession(ctx.db, '/tmp/test', 'completed');
         for (let j = 0; j < 2; j++) {
           insertObservation(ctx.db, {
-            sessionId: session, project: '/tmp/test', type: 'discovery',
+            sessionId: session,
+            project: '/tmp/test',
+            type: 'discovery',
             title: `Cross-session observation ${i}-${j}`,
             importance: 5 + j,
           });
@@ -381,7 +419,10 @@ describe('Reflection E2E', () => {
     it('skips when too few observations', async () => {
       const session = createTestSession(ctx.db, '/tmp/test', 'completed');
       insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Lonely obs',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Lonely obs',
       });
 
       const result = await deepReflect(ctx.db, mockProvider, '/tmp/test');
@@ -396,12 +437,18 @@ describe('Reflection E2E', () => {
       const baseEmb = seededEmbedding(1);
 
       const obs1 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Auth middleware setup',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Auth middleware setup',
       });
       insertEmbedding(ctx.db, obs1, baseEmb);
 
       const obs2 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Auth middleware extension',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Auth middleware extension',
       });
       const similarEmb = perturbedEmbedding(baseEmb, 0.01);
       insertEmbedding(ctx.db, obs2, similarEmb);
@@ -419,12 +466,18 @@ describe('Reflection E2E', () => {
       const session = createTestSession(ctx.db);
 
       const obs1 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Database setup',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Database setup',
       });
       insertEmbedding(ctx.db, obs1, seededEmbedding(1));
 
       const obs2 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'UI rendering',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'UI rendering',
       });
       insertEmbedding(ctx.db, obs2, seededEmbedding(999));
 
@@ -435,7 +488,10 @@ describe('Reflection E2E', () => {
     it('returns 0 when observation has no embedding', () => {
       const session = createTestSession(ctx.db);
       insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'No embedding',
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'No embedding',
       });
 
       const linksCreated = autoLink(ctx.db, 1, '/tmp/test');
@@ -446,7 +502,23 @@ describe('Reflection E2E', () => {
   describe('Prompt Builders', () => {
     it('buildQuickReflectionPrompt includes observations and summary', () => {
       const observations = [
-        { id: 1, session_id: 1, project: '/tmp/test', branch: null, source_ide: 'claude-code', type: 'bugfix' as const, title: 'Fixed null check', facts: JSON.stringify(['Added null guard']), concepts: null, files_affected: null, importance: 7, prompt_number: null, created_at: '', created_at_epoch: Date.now() },
+        {
+          id: 1,
+          session_id: 1,
+          project: '/tmp/test',
+          branch: null,
+          source_ide: 'claude-code',
+          type: 'bugfix' as const,
+          title: 'Fixed null check',
+          facts: JSON.stringify(['Added null guard']),
+          concepts: null,
+          files_affected: null,
+          importance: 7,
+          scope: 'project' as const,
+          prompt_number: null,
+          created_at: '',
+          created_at_epoch: Date.now(),
+        },
       ];
       const summary = { request: 'Fix auth bug', learned: 'Need null checks', completed: 'Bug fixed' };
       const prompt = buildQuickReflectionPrompt(observations, summary);
@@ -458,7 +530,23 @@ describe('Reflection E2E', () => {
 
     it('buildDeepReflectionPrompt includes profile context', () => {
       const observations = [
-        { id: 1, session_id: 1, project: '/tmp/test', branch: null, source_ide: 'claude-code', type: 'discovery' as const, title: 'Found pattern', facts: null, concepts: JSON.stringify(['TypeScript']), files_affected: null, importance: 5, prompt_number: null, created_at: '', created_at_epoch: Date.now() },
+        {
+          id: 1,
+          session_id: 1,
+          project: '/tmp/test',
+          branch: null,
+          source_ide: 'claude-code',
+          type: 'discovery' as const,
+          title: 'Found pattern',
+          facts: null,
+          concepts: JSON.stringify(['TypeScript']),
+          files_affected: null,
+          importance: 5,
+          scope: 'project' as const,
+          prompt_number: null,
+          created_at: '',
+          created_at_epoch: Date.now(),
+        },
       ];
       const profile = [{ category: 'preference', description: 'Prefers TypeScript', confidence: 0.8 }];
       const prompt = buildDeepReflectionPrompt(observations, profile);
@@ -473,7 +561,11 @@ describe('Reflection E2E', () => {
     it('includes developer profile section', () => {
       const session = createTestSession(ctx.db);
       insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Test obs', importance: 5,
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Test obs',
+        importance: 5,
       });
       insertProfileEntry(ctx.db, {
         project: '/tmp/test',
@@ -495,7 +587,11 @@ describe('Reflection E2E', () => {
     it('includes insights section from reflections', () => {
       const session = createTestSession(ctx.db);
       insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test', type: 'discovery', title: 'Test obs', importance: 5,
+        sessionId: session,
+        project: '/tmp/test',
+        type: 'discovery',
+        title: 'Test obs',
+        importance: 5,
       });
       insertReflection(ctx.db, {
         sessionId: session,
@@ -530,7 +626,9 @@ describe('Reflection E2E', () => {
 
       for (let i = 0; i < 20; i++) {
         insertObservation(ctx.db, {
-          sessionId: session, project: '/tmp/test', type: 'discovery',
+          sessionId: session,
+          project: '/tmp/test',
+          type: 'discovery',
           title: `Observation with lots of detail ${i}: ${'y'.repeat(200)}`,
           importance: 5,
         });
@@ -561,7 +659,7 @@ describe('Reflection E2E', () => {
 
       const res = await fetch(`${ctx.baseUrl}/data/reflections?project=/tmp/test-project`);
       expect(res.status).toBe(200);
-      const data = await res.json() as any;
+      const data = (await res.json()) as any;
       expect(data.reflections.length).toBe(1);
       expect(data.reflections[0].insight).toBe('Test insight');
     });
@@ -576,7 +674,7 @@ describe('Reflection E2E', () => {
 
       const res = await fetch(`${ctx.baseUrl}/data/profile?project=/tmp/test-project`);
       expect(res.status).toBe(200);
-      const data = await res.json() as any;
+      const data = (await res.json()) as any;
       expect(data.entries.length).toBe(1);
       expect(data.entries[0].description).toBe('Prefers TypeScript');
     });
@@ -584,16 +682,22 @@ describe('Reflection E2E', () => {
     it('GET /data/links returns observation links', async () => {
       const session = createTestSession(ctx.db);
       const obs1 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test-project', type: 'discovery', title: 'Obs 1',
+        sessionId: session,
+        project: '/tmp/test-project',
+        type: 'discovery',
+        title: 'Obs 1',
       });
       const obs2 = insertObservation(ctx.db, {
-        sessionId: session, project: '/tmp/test-project', type: 'discovery', title: 'Obs 2',
+        sessionId: session,
+        project: '/tmp/test-project',
+        type: 'discovery',
+        title: 'Obs 2',
       });
       insertLink(ctx.db, { sourceId: obs1, targetId: obs2, linkType: 'related', confidence: 0.95 });
 
       const res = await fetch(`${ctx.baseUrl}/data/links?observationId=${obs1}`);
       expect(res.status).toBe(200);
-      const data = await res.json() as any;
+      const data = (await res.json()) as any;
       expect(data.links.length).toBe(1);
       expect(data.links[0].link_type).toBe('related');
     });
@@ -603,7 +707,7 @@ describe('Reflection E2E', () => {
     it('settings endpoint returns reflection section', async () => {
       const res = await fetch(`${ctx.baseUrl}/settings`);
       expect(res.status).toBe(200);
-      const settings = await res.json() as any;
+      const settings = (await res.json()) as any;
       expect(settings.reflection).toBeTruthy();
       expect(settings.reflection.enabled).toBe(true);
       expect(settings.reflection.deepReflectionInterval).toBe(5);

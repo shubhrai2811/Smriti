@@ -1,10 +1,10 @@
 import type { Database } from 'bun:sqlite';
 import type { ObservationRow } from '../../shared/types.js';
-import { findSimilarByVector, distanceToSimilarity } from '../sqlite/vectors.js';
-import { searchByKeyword, normalizeRank } from '../sqlite/fts.js';
-import { getObservation } from '../sqlite/observations.js';
-import { isVecLoaded } from '../sqlite/database.js';
 import { logger } from '../../utils/logger.js';
+import { isVecLoaded } from '../sqlite/database.js';
+import { normalizeRank, searchByKeyword } from '../sqlite/fts.js';
+import { getObservation } from '../sqlite/observations.js';
+import { distanceToSimilarity, findSimilarByVector } from '../sqlite/vectors.js';
 
 export interface ScoredObservation {
   observation: ObservationRow;
@@ -18,9 +18,9 @@ export interface ScoredObservation {
 }
 
 export interface SearchWeights {
-  vector: number;     // default 0.5
-  keyword: number;    // default 0.0 (only used when query has keywords)
-  recency: number;    // default 0.3
+  vector: number; // default 0.5
+  keyword: number; // default 0.0 (only used when query has keywords)
+  recency: number; // default 0.3
   importance: number; // default 0.2
 }
 
@@ -49,7 +49,7 @@ export function recencyDecay(createdAtEpoch: number, nowEpoch?: number): number 
   const ageMs = now - createdAtEpoch;
   const ageDays = ageMs / (1000 * 60 * 60 * 24);
   const halfLifeDays = 7;
-  return Math.pow(0.5, ageDays / halfLifeDays);
+  return 0.5 ** (ageDays / halfLifeDays);
 }
 
 /**
@@ -72,17 +72,8 @@ export function normalizeImportance(importance: number): number {
  *
  * Falls back to recency + importance when no embedding available.
  */
-export function hybridSearch(
-  db: Database,
-  options: HybridSearchOptions,
-): ScoredObservation[] {
-  const {
-    project,
-    queryText,
-    queryEmbedding,
-    limit = 30,
-    dedupeThreshold = 0.92,
-  } = options;
+export function hybridSearch(db: Database, options: HybridSearchOptions): ScoredObservation[] {
+  const { project, queryText, queryEmbedding, limit = 30, dedupeThreshold = 0.92 } = options;
 
   const weights: SearchWeights = {
     ...DEFAULT_WEIGHTS,
@@ -90,10 +81,13 @@ export function hybridSearch(
   };
 
   // Collect candidate observation IDs from multiple sources
-  const candidateScores = new Map<number, {
-    vectorSimilarity: number;
-    keywordRelevance: number;
-  }>();
+  const candidateScores = new Map<
+    number,
+    {
+      vectorSimilarity: number;
+      keywordRelevance: number;
+    }
+  >();
 
   // Source 1: Vector similarity search
   if (queryEmbedding && isVecLoaded()) {
@@ -136,9 +130,11 @@ export function hybridSearch(
 
   // Source 3: If no vector/keyword results, fall back to recent observations
   if (candidateScores.size === 0) {
-    const recent = db.query(
-      'SELECT id FROM observations WHERE project = ? ORDER BY created_at_epoch DESC LIMIT ?'
-    ).all(project, 50) as Array<{ id: number }>;
+    const recent = db
+      .query(
+        "SELECT id FROM observations WHERE (project = ? OR scope = 'global') ORDER BY created_at_epoch DESC LIMIT ?",
+      )
+      .all(project, 50) as Array<{ id: number }>;
 
     for (const row of recent) {
       candidateScores.set(row.id, {
@@ -206,10 +202,7 @@ export function hybridSearch(
  * In Phase 2 with embeddings, we could use cosine similarity.
  * For now, simple title similarity check.
  */
-function deduplicateResults(
-  scored: ScoredObservation[],
-  _threshold: number,
-): ScoredObservation[] {
+function deduplicateResults(scored: ScoredObservation[], _threshold: number): ScoredObservation[] {
   const kept: ScoredObservation[] = [];
   const seenTitles = new Set<string>();
 
@@ -238,8 +231,8 @@ function deduplicateResults(
  * Simple title similarity using Jaccard index on word sets.
  */
 function titleSimilarity(a: string, b: string): number {
-  const wordsA = new Set(a.split(/\s+/).filter(w => w.length > 2));
-  const wordsB = new Set(b.split(/\s+/).filter(w => w.length > 2));
+  const wordsA = new Set(a.split(/\s+/).filter((w) => w.length > 2));
+  const wordsB = new Set(b.split(/\s+/).filter((w) => w.length > 2));
 
   if (wordsA.size === 0 || wordsB.size === 0) return 0;
 
@@ -266,6 +259,6 @@ function sanitizeFtsQuery(query: string): string {
   if (!cleaned) return '';
 
   // Split into words and join with spaces (implicit AND in FTS5)
-  const words = cleaned.split(/\s+/).filter(w => w.length > 1);
+  const words = cleaned.split(/\s+/).filter((w) => w.length > 1);
   return words.join(' ');
 }

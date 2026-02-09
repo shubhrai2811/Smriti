@@ -1,29 +1,23 @@
 import type { Database } from 'bun:sqlite';
-import type { AIProvider } from '../providers/provider.js';
 import type { ObservationRow } from '../../shared/types.js';
-import { insertReflection } from '../sqlite/reflections.js';
+import { logger } from '../../utils/logger.js';
+import type { AIProvider } from '../providers/provider.js';
 import {
+  findSimilarProfileEntry,
   getProfileByProject,
   insertProfileEntry,
   updateProfileConfidence,
-  findSimilarProfileEntry,
 } from '../sqlite/developer-profile.js';
+import { insertReflection } from '../sqlite/reflections.js';
 import { buildDeepReflectionPrompt } from './prompts.js';
 import { parseDeepReflectionResponse } from './response-parser.js';
-import { logger } from '../../utils/logger.js';
 
 /**
  * Check if deep reflection should trigger (every N completed sessions).
  */
-export function shouldRunDeepReflection(
-  db: Database,
-  project: string,
-  interval: number = 5,
-): boolean {
+export function shouldRunDeepReflection(db: Database, project: string, interval: number = 5): boolean {
   const result = db
-    .query(
-      "SELECT COUNT(*) as count FROM sessions WHERE project = ? AND status = 'completed'",
-    )
+    .query("SELECT COUNT(*) as count FROM sessions WHERE project = ? AND status = 'completed'")
     .get(project) as { count: number };
   return result.count > 0 && result.count % interval === 0;
 }
@@ -43,18 +37,17 @@ export async function deepReflect(
       .query(
         `SELECT o.* FROM observations o
        JOIN sessions s ON o.session_id = s.id
-       WHERE o.project = ? AND s.status = 'completed'
+       WHERE (o.project = ? OR o.scope = 'global') AND s.status = 'completed'
        ORDER BY o.created_at_epoch DESC
        LIMIT 200`,
       )
       .all(project) as ObservationRow[];
 
     if (observations.length < 5) {
-      logger.debug(
-        'REFLECTION',
-        'Skipping deep reflection — too few observations',
-        { project, count: observations.length },
-      );
+      logger.debug('REFLECTION', 'Skipping deep reflection — too few observations', {
+        project,
+        count: observations.length,
+      });
       return { patterns: 0, profileUpdates: 0 };
     }
 
@@ -67,7 +60,7 @@ export async function deepReflect(
 
     // Build prompt and call AI
     const prompt = buildDeepReflectionPrompt(observations, existingProfile);
-    const response = await provider.extract(prompt);
+    const response = await provider.extract(prompt, { operation: 'deep_reflection' });
 
     // Parse response
     const observationIds = observations.map((o) => o.id);
@@ -91,12 +84,7 @@ export async function deepReflect(
     let profileUpdates = 0;
     for (const update of result.profileUpdates) {
       // Check if similar profile entry already exists
-      const existing = findSimilarProfileEntry(
-        db,
-        project,
-        update.category,
-        update.description,
-      );
+      const existing = findSimilarProfileEntry(db, project, update.category, update.description);
 
       if (existing) {
         // Reinforce existing: bump confidence and evidence count

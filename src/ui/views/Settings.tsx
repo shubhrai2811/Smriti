@@ -1,5 +1,5 @@
 import { useApi } from '../hooks.js';
-import { colors, baseStyles } from '../theme.js';
+import { baseStyles, colors } from '../theme.js';
 import type { SmritiSettings } from '../types.js';
 
 // Section display configuration
@@ -43,25 +43,18 @@ function SettingsSection({ sectionKey, data }: { sectionKey: string; data: Recor
         <h3 style={{ fontSize: '15px', fontWeight: 600, color: colors.textPrimary, margin: '0 0 2px 0' }}>
           {meta.label}
         </h3>
-        {meta.description && (
-          <div style={{ fontSize: '12px', color: colors.textMuted }}>{meta.description}</div>
-        )}
+        {meta.description && <div style={{ fontSize: '12px', color: colors.textMuted }}>{meta.description}</div>}
       </div>
 
       <table style={baseStyles.table}>
         <tbody>
           {Object.entries(data).map(([key, value]) => {
             const isSensitive = SENSITIVE_KEYS.has(key);
-            const displayValue = isSensitive && value
-              ? String(value).slice(0, 4) + '\u2022'.repeat(12)
-              : formatValue(value);
+            const displayValue =
+              isSensitive && value ? String(value).slice(0, 4) + '\u2022'.repeat(12) : formatValue(value);
 
             const valueColor =
-              typeof value === 'boolean'
-                ? value
-                  ? colors.accentGreen
-                  : colors.accentRed
-                : colors.textPrimary;
+              typeof value === 'boolean' ? (value ? colors.accentGreen : colors.accentRed) : colors.textPrimary;
 
             return (
               <tr key={key}>
@@ -121,11 +114,7 @@ export function Settings() {
 
       {data &&
         Object.entries(data).map(([sectionKey, sectionData]) => (
-          <SettingsSection
-            key={sectionKey}
-            sectionKey={sectionKey}
-            data={sectionData as Record<string, unknown>}
-          />
+          <SettingsSection key={sectionKey} sectionKey={sectionKey} data={sectionData as Record<string, unknown>} />
         ))}
     </div>
   );
